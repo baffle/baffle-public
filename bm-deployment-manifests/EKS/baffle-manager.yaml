@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baffle-manager
+  labels:
+    app: baffle-manager
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: baffle-manager
+  template:
+    metadata:
+      labels:
+        app: baffle-manager
+    spec:
+      serviceAccountName: baffle-sa
+      volumes:
+        - name: baffle-manager-volume
+          persistentVolumeClaim:
+            claimName: baffle-manager-pvc
+      containers:
+      - name: baffle-manager
+        image: 902018721894.dkr.ecr.us-west-2.amazonaws.com/baffle-hub:baffle-manager-v2-master-bm-nightly.latest
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /opt/baffle/baffle-manager
+          name: baffle-manager-volume
+        env:
+          - name: MONGO_IP
+            value: baffle-mongodb
+          - name: MONGO_PORT
+            value: "27017"
+          - name: DEPLOYMENT
+            value: docker
+          - name: BM_PUBLIC_IP
+            value: <ELB Address>
+      imagePullSecrets:
+      - name: ecrcredentials
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: baffle-manager
+  name: baffle-manager
+spec:
+  ports:
+  - port: 8553
+    protocol: TCP
+    targetPort: 8553
+  selector:
+    app: baffle-manager
+  type: ClusterIP

@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baffle-web
+  labels:
+    app: baffle-web
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: baffle-web
+  template:
+    metadata:
+      labels:
+        app: baffle-web
+    spec:
+      containers:
+      - name: baffle-web
+        image: 902018721894.dkr.ecr.us-west-2.amazonaws.com/baffle-hub:baffle-web-v2-master-bm-nightly.latest
+        imagePullPolicy: Always
+      imagePullSecrets:
+      - name: ecrcredentials
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: baffle-web
+  name: baffle-web
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: baffle-web
+  type: ClusterIP

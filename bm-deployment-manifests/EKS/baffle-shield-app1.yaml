@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: baffle-shield-app1-config
+data:
+  BM_IP: "<ELB Address>"
+  BM_SHIELD_SYNC_ID: "U0hJRUxELTM1LjE2Ni4yMzUuMTAxLTE3Mi4zMS4yMi45My00NDMtYmFmZi02MWYwYTdlZjIzOGQ5ZTJjYzYyNjQ1ZDMtODQ0NA=="
+  BM_SHIELD_TAG: "baffle-shield-app1"
+  VERSION: "master-bm-nightly.latest"
+  BS_SSL: "true"
+  BS_SSL_KEYSTORE_FILE: "/opt/sslconfig/baffleshield-keystore.jks"
+  BS_SSL_KEYSTORE_PASSWORD: "keystore"
+  BS_SSL_TRUSTSTORE_FILE: "/opt/sslconfig/baffleshield-keystore.jks"
+  BS_SSL_TRUSTSTORE_PASSWORD: "keystore"
+  BS_SSL_TLS_VERSION: "TLSv1.2"
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baffle-shield-app1
+  labels:
+    app: baffle-shield-app1
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: baffle-shield-app1
+  template:
+    metadata:
+      labels:
+        app: baffle-shield-app1
+    spec:
+      serviceAccountName: baffle-sa
+      containers:
+      - name: baffle-shield-app1
+        image: 902018721894.dkr.ecr.us-west-2.amazonaws.com/baffle-hub:baffle-shield-sql-v2-master-bm-nightly.latest
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: baffle-shield-app1-config
+      imagePullSecrets:
+      - name: ecrcredentials
+
