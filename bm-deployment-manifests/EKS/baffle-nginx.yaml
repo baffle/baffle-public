@@ -31,6 +31,13 @@ spec:
         args: ["-c", "envsubst '$${BM_IP},$${BM_URL},$${WEB_URL}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]
       imagePullSecrets:
       - name: ecrcredentials
+      initContainers:
+      - name: init-baffle-manager
+        image: busybox:1.28
+        command: [ 'sh', '-c', "until nslookup baffle-manager.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for baffle-manager service; sleep 2; done"]
+      - name: init-baffle-web
+        image: busybox:1.28
+        command: [ 'sh', '-c', "until nslookup baffle-web.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for baffle-web service; sleep 2; done"]
 
 ---        
 
