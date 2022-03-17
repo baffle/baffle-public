@@ -33,12 +33,16 @@ spec:
             value: baffle-mongodb
           - name: MONGO_PORT
             value: "27017"
-          - name: DEPLOYMENT
-            value: docker
+          - name: SPRING_PROFILES_ACTIVE
+            value: docker_prod
           - name: BM_PUBLIC_IP
             value: <ELB Address>
       imagePullSecrets:
       - name: ecrcredentials
+      initContainers:
+      - name: init-baffle-mongodb
+        image: busybox:1.28
+        command: [ 'sh', '-c', "until nslookup baffle-mongodb.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local; do echo waiting for baffle-mongodb service; sleep 2; done"]
 
 ---
 
