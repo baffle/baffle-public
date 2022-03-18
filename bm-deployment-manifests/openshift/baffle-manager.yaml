@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baffle-manager
+  labels:
+    app: baffle-manager
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: baffle-manager
+  template:
+    metadata:
+      labels:
+        app: baffle-manager
+    spec:
+      volumes:
+        - name: baffle-manager-volume
+          persistentVolumeClaim:
+            claimName: baffle-manager-pvc
+      containers:
+      - name: baffle-manager
+        image: <YOUR-CR>/baffle-manager:Release-Baffle.1.7.0.1.1
+        imagePullPolicy: Always
+        volumeMounts:
+        - mountPath: /opt/baffle/baffle-manager
+          name: baffle-manager-volume
+        env:
+          - name: MONGO_IP
+            value: baffle-mongodb
+          - name: MONGO_PORT
+            value: "27017"
+          - name: SPRING_PROFILES_ACTIVE
+            value: docker_prod
+      imagePullSecrets:
+      - name: all-icr-io
+      initContainers:
+      - name: init-baffle-mongodb
+        image: busybox:1.28
+        command: ['sh', '-c', 'until getent hosts baffle-mongodb; do echo waiting for baffle-mongodb; sleep 2; done;']
+
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: baffle-manager
+  name: baffle-manager
+spec:
+  ports:
+  - port: 8553
+    protocol: TCP
+    targetPort: 8553
+  selector:
+    app: baffle-manager
+  type: ClusterIP

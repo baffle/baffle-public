@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: baffle-shield-app1-config
+data:
+  BM_IP: "baffle-nginx"
+  BM_SHIELD_SYNC_ID: "<SYNC-ID-FROM-BM-APP-ENROLLMENT>"
+  BM_SHIELD_TAG: "baffle-shield-app1"
+  VERSION: "Release-Baffle.1.7.0.1"
+  BS_SSL: "true"
+  BS_SSL_KEYSTORE_FILE: "/opt/sslconfig/baffleshield-keystore.jks"
+  BS_SSL_KEYSTORE_PASSWORD: "keystore"
+  BS_SSL_TRUSTSTORE_FILE: "/opt/sslconfig/baffleshield-keystore.jks"
+  BS_SSL_TRUSTSTORE_PASSWORD: "keystore"
+  BS_SSL_TLS_VERSION: "TLSv1.2"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baffle-shield-app1
+  labels:
+    app: baffle-shield-app1
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: baffle-shield-app1
+  template:
+    metadata:
+      labels:
+        app: baffle-shield-app1
+    spec:
+#      volumes:
+#        - name: baffle-shield-volume
+#          persistentVolumeClaim:
+#            claimName: baffle-shield-pvc
+      containers:
+      - name: baffle-shield-app1
+        image: <YOUR-CR>/baffle-shield-postgresql:Release-Baffle.1.7.0.1.1
+        imagePullPolicy: Always
+#        volumeMounts:
+#        - mountPath: /opt/sslconfig
+#          name: baffle-shield-volume
+        envFrom:
+        - configMapRef:
+            name: baffle-shield-app1-config
+      imagePullSecrets:
+      - name: all-icr-io
+

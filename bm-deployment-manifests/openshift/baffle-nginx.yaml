@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baffle-nginx
+  labels:
+    app: baffle-nginx
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: baffle-nginx
+  template:
+    metadata:
+      labels:
+        app: baffle-nginx
+    spec:
+      containers:
+      - name: nginx
+        image: <YOUR-CR>/baffle-nginx:Release-Baffle.1.7.0.1.1
+        imagePullPolicy: Always
+        env:
+        - name: BM_IP
+          value: baffle-manager
+        - name: BM_URL
+          value: http://baffle-manager:8553
+        - name: WEB_URL
+          value: http://baffle-web:8080
+        command: ["/bin/sh"]
+        args: ["-c", "envsubst '$${BM_IP},$${BM_URL},$${WEB_URL}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"]
+      imagePullSecrets:
+      - name: all-icr-io
+      initContainers:
+      - name: init-baffle-manager
+        image: busybox:1.28
+        command: ['sh', '-c', 'until getent hosts baffle-manager; do echo waiting for baffle-manager; sleep 2; done;']
+      - name: init-baffle-web
+        image: busybox:1.28
+        command: ['sh', '-c', 'until getent hosts baffle-web; do echo waiting for baffle-web; sleep 2; done;']
+
+
+---        
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: baffle-nginx
+  name: baffle-nginx
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app: baffle-nginx
+  type: LoadBalancer

@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baffle-web
+  labels:
+    app: baffle-web
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: baffle-web
+  template:
+    metadata:
+      labels:
+        app: baffle-web
+    spec:
+      containers:
+      - name: baffle-web
+        image: <YOUR-CR>/baffle-web:Release-Baffle.1.7.0.1.1
+        imagePullPolicy: Always
+      imagePullSecrets:
+      - name: all-icr-io
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: baffle-web
+  name: baffle-web
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: baffle-web
+  type: ClusterIP

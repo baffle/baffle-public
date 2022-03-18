@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: baffle-mongodb-pvc
+ labels:
+   billingType: "hourly"
+   region: us-south
+   zone: dal10
+spec:
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: 5Gi
+ storageClassName: ibmc-block-bronze
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: baffle-manager-pvc
+ labels:
+   billingType: "hourly"
+   region: us-south
+   zone: dal10
+spec:
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: 5Gi
+ storageClassName: ibmc-block-bronze     
