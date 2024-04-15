@@ -141,6 +141,10 @@ Resources:
       Handler: index.handler
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
+      VpcConfig:
+        SubnetIds:
+          - !Ref PublicSubnet1
+          - !Ref PrivateSubnet1
 
   LambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -442,7 +446,14 @@ Outputs:
     Description: "The URL for PG Admin Console"
     Value: !Join [ "", [ "http://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8446" ] ]
 
-
   DMSMigrationTaskURL:
     Description: "URL for the DMS migration task"
     Value: !Join [ "", [ "https://", !Ref "AWS::Region", ".console.aws.amazon.com/dms/v2/home?region=",  !Ref "AWS::Region", "#taskDetails/", !Ref "AWS::StackName", "-replication-instance-task" ] ]
+
+  StartMigrationTask:
+    Description: "Command to start DMS migration task"
+    Value: !Join [ "", [ "aws dms start-replication-task --replication-task-arn ", !Ref DMSMigrationTask, " --start-replication-task-type start-replication" ] ]
+
+  StopMigrationTask:
+    Description: "Command to stop DMS migration task"
+    Value: !Join [ "", [ "aws dms stop-replication-task --replication-task-arn ", !Ref DMSMigrationTask ] ]

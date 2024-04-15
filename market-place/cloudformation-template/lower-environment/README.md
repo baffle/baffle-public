@@ -46,3 +46,8 @@ Once the template creates the stack it will output some value. The following are
 
 For example:
 `aws --region us-east-2 --profile other-profile cloudformation create-stack --stack-name lower-env --template-body file://create_baffle_lower_env_stack_template.yaml --capabilities CAPABILITY_NAMED_IAM --parameters ParameterKey=MyIP,ParameterValue=$(curl -s http://checkip.amazonaws.com/) ParameterKey=DBPassword,ParameterValue=Baffle-2024 ParameterKey=UserEmail,ParameterValue=admin@baffle.io ParameterKey=UserPassword,ParameterValue=Baffle-2024`
+
+
+## Download keypair 
+The keypair for Baffle EC2 instance is stored on SSM and can be downloaded. Following link describes a process of downloading link 
+https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html#create-key-pair-cloudformation
