@@ -141,10 +141,6 @@ Resources:
       Handler: index.handler
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
-      VpcConfig:
-        SubnetIds:
-          - !Ref PublicSubnet1
-          - !Ref PrivateSubnet1
 
   LambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
