@@ -3,11 +3,14 @@ Description: "This template creates a policy, a group and attaches the policy to
 Resources:
   BaffleCFCreateInfraGroup:
     Type: "AWS::IAM::Group"
+    Properties:
+      GroupName: !Join [ "-", [ !Ref "AWS::StackName", "group" ] ]
 
   BaffleCFCreateInfraPolicy:
     Type: "AWS::IAM::ManagedPolicy"
     Properties:
       Description: "IAM policy for managing resources"
+      ManagedPolicyName: !Join [ "-", [ !Ref "AWS::StackName", "policy" ] ]
       Groups:
         - !Ref BaffleCFCreateInfraGroup
       PolicyDocument:

@@ -177,6 +177,7 @@ Resources:
 
   BaffleDB:
     Type: "AWS::RDS::DBInstance"
+    DeletionPolicy: Delete
     Properties:
       DBParameterGroupName: !Ref DBParameterGroup
       AllocatedStorage: "20"
