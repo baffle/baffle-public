@@ -101,7 +101,7 @@ send_post_request() {
 get_database_body(){
   database_body=$(cat <<EOF
 {
-  "name": "Postres",
+  "name": "PostgresSQL",
   "dbType": "POSTGRES",
   "hostname": "$db_host_name",
   "port": 5432,
@@ -300,7 +300,95 @@ get_ssn_dpp_body(){
   support_user_group_id=$5
   hr_user_group_id=$6
 
-  ssn_dpp_body=$(cat <<EOF
+  ssn_access_dpp_body=$(cat <<EOF
+{
+  "name": "ssn-fpe-decimal",
+  "dataSources": [
+    {
+      "id": "$data_source_id",
+      "name": "user-pii"
+    }
+  ],
+  "encryption": {
+    "encryptionType": "FPE",
+    "encryptionKeyMode": "GLOBAL",
+    "fpeEncryption": {
+        "fpeFormats": [
+          {
+            "id": "$fpe_decimal_id",
+            "format": "fpe-decimal",
+            "datatype": "varchar"
+          }
+        ],
+        "globalKey": {
+          "kek": {
+            "id": "$kek_id"
+          },
+          "dek": {
+            "id": "$dek_id"
+          }
+        }
+    }
+  }
+}
+EOF
+)
+  echo "$ssn_access_dpp_body"
+}
+
+# Get ccn data protection policy body
+get_ccn_dpp_body(){
+  data_source_id=$1
+  kek_id=$2
+  dek_id=$3
+  fpe_cc_id=$4
+  support_user_group_id=$5
+  ccn_access_dpp_body=$(cat <<EOF
+{
+  "name": "ccn-fpe-cc",
+  "dataSources": [
+    {
+      "id": "$data_source_id",
+      "name": "user-pii"
+    }
+  ],
+  "encryption": {
+    "encryptionType": "FPE",
+    "encryptionKeyMode": "GLOBAL",
+    "fpeEncryption": {
+        "fpeFormats": [
+          {
+            "id": "$fpe_cc_id",
+            "format": "fpe-cc",
+            "datatype": "varchar"
+          }
+        ],
+        "globalKey": {
+          "kek": {
+            "id": "$kek_id"
+          },
+          "dek": {
+            "id": "$dek_id"
+          }
+        }
+    }
+  }
+}
+EOF
+)
+  echo "$ccn_access_dpp_body"
+}
+
+# Get ssn data protection with access policy body
+get_ssn_access_dpp_body(){
+  data_source_id=$1
+  kek_id=$2
+  dek_id=$3
+  fpe_decimal_id=$4
+  support_user_group_id=$5
+  hr_user_group_id=$6
+
+  ssn_access_dpp_body=$(cat <<EOF
 {
   "name": "ssn-fpe-decimal-access",
   "dataSources": [
@@ -367,16 +455,16 @@ get_ssn_dpp_body(){
 }
 EOF
 )
-  echo "$ssn_dpp_body"
+  echo "$ssn_access_dpp_body"
 }
-# Get ccn data protection policy body
-get_ccn_dpp_body(){
+# Get ccn data protection with access policy body
+get_ccn_access_dpp_body(){
   data_source_id=$1
   kek_id=$2
   dek_id=$3
   fpe_cc_id=$4
   support_user_group_id=$5
-  ccn_dpp_body=$(cat <<EOF
+  ccn_access_dpp_body=$(cat <<EOF
 {
   "name": "ccn-fpe-cc-access",
   "dataSources": [
@@ -436,17 +524,18 @@ get_ccn_dpp_body(){
 }
 EOF
 )
-  echo "$ccn_dpp_body"
+  echo "$ccn_access_dpp_body"
 }
 
 # Get DB Proxy Body
 get_db_proxy_body(){
-  database_id=$1
-  aws_kms_id=$2
-  kek_id=$3
-  db_proxy_body=$(cat <<EOF
+  name=$1
+  database_id=$2
+  aws_kms_id=$3
+  kek_id=$4
+  db_proxy_access_body=$(cat <<EOF
 {
-  "name": "db-proxy-postgres",
+  "name": "$name",
   "database": {
     "id": "$database_id"
   },
@@ -460,43 +549,46 @@ get_db_proxy_body(){
 }
 EOF
 )
-  echo "$db_proxy_body"
+  echo "$db_proxy_access_body"
 }
 
 # Get RBAC Body
-get_rbac_body(){
-  rbac_body=$(cat <<EOF
+get_rbac_port_change_body(){
+  rbac_port_change_body=$(cat <<EOF
 {
-  "name": "RBAC",
+  "name": "RBAC-Port-change",
   "debugLevel": "NONE",
   "rbacConfig": {
     "mode": "SUPPORTED",
     "userDetermination": "SESSION",
     "enabled": true
   },
-  "advancedConfig": {}
+  "advancedConfig": {
+     "baffleshield.clientPort": 5433
+  }
 }
 EOF
 )
-  echo "$rbac_body"
+  echo "$rbac_port_change_body"
 }
 
 # get Deployment Body
 get_deploy_body(){
-  ssn_dpp_id=$1
-  ccn_dpp_id=$2
+  name=$1
+  ssn_access_dpp_id=$2
+  ccn_access_dpp_id=$3
   deploy_body=$(cat <<EOF
 {
-  "name": "add_encryption_access_policies",
+  "name": "$name",
   "type": "DATA_POLICIES",
   "mode": "ADD_POLICIES",
   "dataPolicies": {
     "addedDataPolicies": [
       {
-        "id": "$ssn_dpp_id"
+        "id": "$ssn_access_dpp_id"
       },
       {
-        "id": "$ccn_dpp_id"
+        "id": "$ccn_access_dpp_id"
       }
     ]
   }
@@ -567,36 +659,38 @@ EOF
 
 
 start_postgres_proxy(){
-  syncId=$1
+  access_syncId=$1
+  folder_path=$2
+  port=$3
   # Change the current directory
-  cd /home/ec2-user/Baffle-Shield-Postgresql-Docker-Deploy
+  cd /home/ec2-user/$folder_path
 
   # Check if BM_DB_PROXY_SYNC_ID exists in .env file
   if grep -q "BM_DB_PROXY_SYNC_ID=" .env; then
     # If it exists, replace it
-    sed -i "s/^BM_DB_PROXY_SYNC_ID=.*/BM_DB_PROXY_SYNC_ID=$syncId/" .env
+    sed -i "s/^BM_DB_PROXY_SYNC_ID=.*/BM_DB_PROXY_SYNC_ID=$access_syncId/" .env
   else
     # If it doesn't exist, add it
-    echo "BM_DB_PROXY_SYNC_ID=$syncId" >> .env
+    echo "BM_DB_PROXY_SYNC_ID=$access_syncId" >> .env
   fi
 
   echo "Starting Postgres Proxy Service..." >&2
   # Run docker compose
   docker-compose up -d &
 
-  # Check if port 5432 is open
+  # Check if port  is open
   counter=0
-  while ! netstat -tuln | grep 5432 && [ $counter -lt 10 ]; do
-    echo "Port 5432 is not open. Retrying in 30 seconds..." >&2
+  while ! netstat -tuln | grep "$port" && [ $counter -lt 10 ]; do
+    echo "Port $port is not open. Retrying in 30 seconds..." >&2
     sleep 30
     ((counter++))
   done
 
-  if netstat -tuln | grep 5432; then
-    echo "Port 5432 is open. Postgres Proxy Service is up and running." >&2
+  if netstat -tuln | grep "$port"; then
+    echo "Port $port is open. Postgres Proxy Service is up and running." >&2
     echo "success"
   elif [ $counter -eq 10 ]; then
-    echo "Port 5432 is not open after 5 minutes. Exiting script." >&2
+    echo "Port $port is not open after 5 minutes. Exiting script." >&2
     echo "error"
   fi
 }
@@ -617,7 +711,7 @@ start_pg_admin(){
   "Servers": {
     "1": {
       "Name": "direct@baffle",
-      "Group": "mask-use-case",
+      "Group": "static-mask",
       "Host": "$db_host_name",
       "Port": 5432,
       "MaintenanceDB": "postgres",
@@ -627,39 +721,59 @@ start_pg_admin(){
     },
     "2": {
       "Name": "shield@baffle",
-      "Group": "mask-use-case",
-      "Host": "shield",
+      "Group": "static-mask",
+      "Host": "shield_static_mask",
       "Port": 5432,
       "MaintenanceDB": "postgres",
       "Username": "$db_user_name",
       "PassFile": "/pgadmin4/pgpass",
       "role": "baffle"
     },
-   "3": {
+    "3": {
+      "Name": "direct@baffle",
+      "Group": "dynamic-mask",
+      "Host": "$db_host_name",
+      "Port": 5432,
+      "MaintenanceDB": "postgres",
+      "Username": "$db_user_name",
+      "PassFile": "/pgadmin4/pgpass",
+      "role": "baffle"
+    },
+    "4": {
+      "Name": "shield@baffle",
+      "Group": "dynamic-mask",
+      "Host": "shield_dynamic_mask",
+      "Port": 5433,
+      "MaintenanceDB": "postgres",
+      "Username": "$db_user_name",
+      "PassFile": "/pgadmin4/pgpass",
+      "role": "baffle"
+    },
+   "5": {
      "Name": "Shield@harry_HR",
-     "Group": "mask-use-case",
-     "Host": "shield",
-     "Port": 5432,
+     "Group": "dynamic-mask",
+     "Host": "shield_dynamic_mask",
+     "Port": 5433,
      "MaintenanceDB": "postgres",
      "Username": "harry",
      "PassFile": "/pgadmin4/pgpass",
      "role": "baffle"
    },
-   "4": {
-        "Name": "Shield@sally_support",
-        "Group": "mask-use-case",
-        "Host": "shield",
-        "Port": 5432,
-        "MaintenanceDB": "postgres",
-        "Username": "sally",
-        "PassFile": "/pgadmin4/pgpass",
-        "role": "baffle"
+   "6": {
+      "Name": "Shield@sally_support",
+      "Group": "dynamic-mask",
+      "Host": "shield_dynamic_mask",
+      "Port": 5433,
+      "MaintenanceDB": "postgres",
+      "Username": "sally",
+      "PassFile": "/pgadmin4/pgpass",
+      "role": "baffle"
   },
-  "5": {
+  "7": {
     "Name": "Shield@ron_remote",
-    "Group": "mask-use-case",
-    "Host": "shield",
-    "Port": 5432,
+    "Group": "dynamic-mask",
+    "Host": "shield_dynamic_mask",
+    "Port": 5433,
     "MaintenanceDB": "postgres",
     "Username": "ron",
     "PassFile": "/pgadmin4/pgpass",
@@ -683,9 +797,10 @@ EOF
 cat << EOF > pgpass
 $db_host_name:5432:*:$db_user_name:$db_password
 shield:5432:*:$db_user_name:$db_password
-shield:5432:*:harry:harry
-shield:5432:*:sally:sally
-shield:5432:*:ron:ron
+shield:5433:*:$db_user_name:$db_password
+shield:5433:*:harry:harry
+shield:5433:*:sally:sally
+shield:5433:*:ron:ron
 EOF
 
   chmod 644 pgpass
@@ -943,22 +1058,72 @@ else
   echo "CCN DPP ID: $ccn_dpp_id" >&2
 fi
 
-# Get DB Proxy Body
-db_proxy_body=$(get_db_proxy_body "$database_id" "$aws_kms_id" "$kek_id")
+# Get SSN ACCESS DPP Body
+ssn_access_dpp_body=$(get_ssn_access_dpp_body "$ssn_ds_id" "$kek_id" "$dek_id" "$fpe_decimal_id" "$support_user_group_id" "$hr_user_group_id")
+# Enroll SSN ACCESS DPP
+ssn_access_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$ssn_access_dpp_body" "id")
+if [ "$ssn_access_dpp_id" == "error" ]; then
+  echo "SSN_ACCESS DPP enrollment failed. Exiting script." >&2
+  exit 1
+else
+  echo "SSN_ACCESS DPP ID: $ssn_access_dpp_id" >&2
+fi
+
+# Get CCN ACCESS DPP Body
+ccn_access_dpp_body=$(get_ccn_access_dpp_body "$ccn_ds_id" "$kek_id" "$dek_id" "$fpe_cc_id" "$support_user_group_id")
+# Enroll CCN ACCESS DPP
+ccn_access_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$ccn_access_dpp_body" "id")
+if [ "$ccn_access_dpp_id" == "error" ]; then
+  echo "CCN_ACCESS DPP enrollment failed. Exiting script." >&2
+  exit 1
+else
+  echo "CCN_ACCESS DPP ID: $ccn_access_dpp_id" >&2
+fi
+
+db_proxy_static_mask_body=$(get_db_proxy_body "proxy_static_mask" "$database_id" "$aws_kms_id" "$kek_id")
 # Enroll DB Proxy
-read db_proxy_id syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_body" "id" "syncId")
-if [ "$db_proxy_id" == "error" ]; then
+read db_proxy_static_mask_id static_mask_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_static_mask_body" "id" "syncId")
+if [ "$db_proxy_static_mask_id" == "error" ]; then
   echo "DB Proxy enrollment failed. Exiting script." >&2
   exit 1
 else
-  echo "DB Proxy ID: $db_proxy_id" >&2
-  echo "Sync ID: $syncId" >&2
+  echo "DB Proxy ID: $db_proxy_static_mask_id" >&2
+  echo "Sync ID: $static_mask_syncId" >&2
 fi
 
-# Get RBAC Body
-rbac_body=$(get_rbac_body)
+# Deploy DPP
+deploy_enc_body=$(get_deploy_body "add_encryption_policies" "$ssn_dpp_id" "$ccn_dpp_id")
+deployment_enc_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_static_mask_id/data-policies/deploy" "$deploy_enc_body" "id")
+if [ "$deployment_enc_id" == "error" ]; then
+  echo "Deployment failed. Exiting script." >&2
+  exit 1
+else
+  echo "Deployment ID: $deployment_enc_id" >&2
+fi
+
+# Start Postgres Proxy
+status=$(start_postgres_proxy "$static_mask_syncId" "Baffle-Shield-Postgresql-Static-Mask" 5432)
+if [ "$status" == "error" ]; then
+  echo "Postgres Proxy startup failed. Exiting script."
+  exit 1
+fi
+
+# Get DB Proxy Body
+db_proxy_access_body=$(get_db_proxy_body "proxy_dynamic_mask" "$database_id" "$aws_kms_id" "$kek_id")
+# Enroll DB Proxy
+read db_proxy_access_id access_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_access_body" "id" "syncId")
+if [ "$db_proxy_access_id" == "error" ]; then
+  echo "DB Proxy enrollment failed. Exiting script." >&2
+  exit 1
+else
+  echo "DB Proxy ID: $db_proxy_access_id" >&2
+  echo "Sync ID: $access_syncId" >&2
+fi
+
+# Get RBAC and Port change Body
+rbac_port_change_body=$(get_rbac_port_change_body)
 # Enable RBAC
-rbac_name=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_id/configurations" "$rbac_body" "name")
+rbac_name=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_access_id/configurations" "$rbac_port_change_body" "name")
 if [ "$rbac_name" == "error" ]; then
   echo "Enabling RBAC failed. Exiting script." >&2
   exit 1
@@ -967,9 +1132,9 @@ else
 fi
 
 # Get Deployment Body
-deploy_body=$(get_deploy_body "$ssn_dpp_id" "$ccn_dpp_id")
+deploy_body=$(get_deploy_body "add_encryption_access_policies" "$ssn_access_dpp_id" "$ccn_access_dpp_id")
 # Deploy DPP
-deployment_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_id/data-policies/deploy" "$deploy_body" "id")
+deployment_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_access_id/data-policies/deploy" "$deploy_body" "id")
 if [ "$deployment_id" == "error" ]; then
   echo "Deployment failed. Exiting script." >&2
   exit 1
@@ -977,10 +1142,8 @@ else
   echo "Deployment ID: $deployment_id" >&2
 fi
 
-
-
 # Start Postgres Proxy
-status=$(start_postgres_proxy $syncId)
+status=$(start_postgres_proxy "$access_syncId" "Baffle-Shield-Postgresql-Dynamic-Mask" 5433)
 if [ "$status" == "error" ]; then
   echo "Postgres Proxy startup failed. Exiting script."
   exit 1
