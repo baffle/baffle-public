@@ -3,7 +3,7 @@ Description: "Ask user for IP, and user credential for "
 
 Parameters:
   MyIP:
-    Description: "User IP"
+    Description: "User IP to be whitelisted"
     Type: String
 
   UserEmail:
@@ -20,6 +20,19 @@ Parameters:
     Type: String
     NoEcho: true
 
+Metadata:
+  Instances:
+    Description: "EC2 Instance that runs the Baffle Services (Shield, Manager, PGAdmin UI)"
+  Databases:
+    Description: "RDS database for source and target"
+  Key:
+    Description: "AWS KMS used for Key Encryption Key (KEK)"
+  S3Bucket:
+    Description: "S3 Bucket used to store Data Encryption Key (DEK)"
+  DMSInstance:
+    Description: "DMS Instance and Task to migrate data"
+  LambdaFunction:
+    Description: "Utility Functions to delete S3 bucket and Start DMS Task"
 Resources:
   BaffleVPC:
     Type: "AWS::EC2::VPC"
@@ -142,7 +155,7 @@ Resources:
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
 
-  LambdaLogGroup:
+  DeleteBucketLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
       LogGroupName: !Sub '/aws/lambda/${DeleteBucketLambdaFunction}'
@@ -424,6 +437,109 @@ Resources:
           ]
         }
       ReplicationInstanceArn: !Ref DMSReplicationInstance
+
+  DMSTaskEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: "Event Rule to capture starting and stopping DMS TASK"
+      EventBusName: default
+      EventPattern:
+        source:
+          - "aws.dms"
+        detail:
+          eventId:
+            - "DMS-EVENT-0074"
+            - "DMS-EVENT-0073"
+      Targets:
+        - Arn: !GetAtt StartStopDMSTaskLambda.Arn
+          Id: "LambdasTarget"
+
+  DMSTaskEventRulePermissions:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt StartStopDMSTaskLambda.Arn
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt DMSTaskEventRule.Arn
+
+  StartStopDMSTaskLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "cloudwatch-logs-access"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+        - PolicyName: "DMS-TaskStartStop-access"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dms:StartReplicationTask"
+                  - "dms:StopReplicationTask"
+                Resource: "*"
+
+  StartStopDMSTaskLambda:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+
+          def lambda_handler(event, context):
+              try:
+                  print(event)
+                  dms_client = boto3.client('dms')
+                  task_arn = event['resources'][0]
+                  event_id = event['detail']['eventId']
+                  print(event_id)
+                  print(task_arn)
+                  if event_id == 'DMS-EVENT-0074' :
+                      # created start task
+                      dms_client.start_replication_task(
+                          ReplicationTaskArn=task_arn,
+                          StartReplicationTaskType='start-replication'
+                      )
+                      print("starting")
+                      return {'statusCode': 200, 'body': json.dumps(f'Successfully started the DMS Task')}
+                  elif event_id == 'DMS-EVENT-0073' :
+                      # deleted, stop task
+                      dms_client.stop_replication_task(
+                          ReplicationTaskArn=task_arn
+                      )
+                      print("stopping")
+                      return {'statusCode': 200, 'body': json.dumps(f'Successfully stopped the DMS Task')}
+                  else:
+                      return {'statusCode': 200, 'body': json.dumps(f'Nothing needed for the event id')}
+              except Exception as e:
+                  print(e)
+                  return {'statusCode': 500, 'body': json.dumps('Error processing the request.')}
+      Handler: index.lambda_handler
+      Runtime: python3.10
+      Timeout: 900
+      ReservedConcurrentExecutions: 5
+      Role: !GetAtt StartStopDMSTaskLambdaRole.Arn
+
+  StartLambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${StartStopDMSTaskLambda}'
+      RetentionInDays: 3
 
 Outputs:
 

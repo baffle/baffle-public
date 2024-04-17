@@ -137,6 +137,9 @@ Resources:
               - "lambda:DeleteFunction"
               - "lambda:GetFunction"
               - "lambda:InvokeFunction"
+              - "lambda:PutFunctionConcurrency"
+              - "lambda:AddPermission"
+              - "lambda:RemovePermission"
             Resource: "*"
           - Effect: "Allow"
             Action:
@@ -149,6 +152,18 @@ Resources:
               - "ssm:PutParameter"
               - "ssm:DeleteParameter"
             Resource: "*"
+          - Effect: "Allow"
+            Action:
+              - "events:DescribeRule"
+              - "events:DeleteRule"
+              - "events:PutRule"
+              - "events:PutTargets"
+              - "events:RemoveTargets"
+              - "events:PutPermission"
+              - "events:RemovePermission"
+              - "events:TestEventPattern"
+            Resource: "*"
+
 Outputs:
   BaffleCFCreateInfraGroupOutput:
     Description: "Name of the group"
