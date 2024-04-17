@@ -1,17 +1,17 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Ask user for IP, and user credential for "
+Description: "Ask user for IP, and user credential"
 
 Parameters:
   MyIP:
-    Description: "User IP"
+    Description: "User IP to be whitelisted"
     Type: String
 
   UserEmail:
-    Description: "Email for Baffle Manage user"
+    Description: "Email for Baffle Manage and PGAdmin UI user"
     Type: String
 
   UserPassword:
-    Description: "Password for Baffle Manage user"
+    Description: "Password for Baffle Manage and PGAdmin UI user"
     Type: String
     NoEcho: true
 
@@ -19,6 +19,20 @@ Parameters:
     Description: "Password for RDS Database"
     Type: String
     NoEcho: true
+
+Metadata:
+  Instances:
+    Description: "EC2 Instance that runs the Baffle Services (Shield, Manager, PGAdmin UI)"
+  Databases:
+    Description: "RDS database for source and target"
+  Key:
+    Description: "AWS KMS used for Key Encryption Key (KEK)"
+  S3Bucket:
+    Description: "S3 Bucket used to store Data Encryption Key (DEK)"
+  DMSInstance:
+    Description: "DMS Instance and Task to migrate data"
+  LambdaFunction:
+    Description: "Utility Functions to delete S3 bucket and Start DMS Task"
 
 Resources:
   BaffleVPC:
@@ -142,7 +156,7 @@ Resources:
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
 
-  LambdaLogGroup:
+  DeleteBucketLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
       LogGroupName: !Sub '/aws/lambda/${DeleteBucketLambdaFunction}'
@@ -257,7 +271,7 @@ Resources:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: "kms:*"
             Resource: "*"
-          - Sid: "Allow use of the key"
+          - Sid: "Allow use of the key by role"
             Effect: Allow
             Principal:
               AWS: !GetAtt BaffleShieldRole.Arn
