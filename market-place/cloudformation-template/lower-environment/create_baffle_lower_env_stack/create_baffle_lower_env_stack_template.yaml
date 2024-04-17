@@ -211,8 +211,8 @@ Resources:
     Properties:
       DBSubnetGroupDescription: "A DB Subnet Group for BaffleDB"
       SubnetIds:
-        - !Ref PublicSubnet1
         - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
 
   BaffleDBSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -307,10 +307,6 @@ Resources:
     Properties:
       GroupDescription: "Security group with specific ports open"
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp:  !Join [ "", [ !Ref MyIP, "/32" ] ]
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
