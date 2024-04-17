@@ -53,6 +53,7 @@ Resources:
               - "ec2:CreateKeyPair"
               - "ec2:DeleteKeyPair"
               - "ec2:DescribeKeyPairs"
+              - "ec2:DescribeSecurityGroupRules"
             Resource: "*"
           - Effect: "Allow"
             Action:
@@ -119,7 +120,7 @@ Resources:
               - "iam:AttachRolePolicy"
               - "iam:DetachRolePolicy"
               - "iam:TagRole"
-              - "iam:ListRole"
+              - "iam:ListRoles"
               - "iam:ListPolicies"
               - "iam:ListRolePolicies"
               - "iam:ListUserPolicies"
