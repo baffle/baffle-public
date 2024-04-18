@@ -851,6 +851,7 @@ postgres_lower_env_db_creation() {
       ssn VARCHAR(50)
 
   );"
+  alter_table_replica_full_identity="ALTER TABLE customers REPLICA IDENTITY FULL;"
   create_user_harry="CREATE USER harry PASSWORD 'harry';"
   create_user_sally="CREATE USER sally PASSWORD 'sally';"
   create_user_ron="CREATE USER ron WITH PASSWORD 'ron';"
@@ -865,6 +866,7 @@ postgres_lower_env_db_creation() {
   execution_status=$(execute_sql_command "postgres" "$prod_db_create_command")
   execution_status=$(execute_sql_command "postgres" "$enc_db_create_command")
   execution_status=$(execute_sql_command "sales" "$table_create_command")
+  execution_status=$(execute_sql_command "sales" "$alter_table_replica_full_identity")
   execution_status=$(execute_sql_command "sales_dev" "$table_create_command")
   execution_status=$(execute_sql_command "sales_dev" "$create_user_harry")
   execution_status=$(execute_sql_command "sales_dev" "$create_user_sally")
