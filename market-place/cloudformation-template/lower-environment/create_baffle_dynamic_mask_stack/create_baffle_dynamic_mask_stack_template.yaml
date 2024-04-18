@@ -270,7 +270,7 @@ Resources:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
 
-  BaffleShieldKey:
+  BaffleShield1Key:
     Type: "AWS::KMS::Key"
     Properties:
       Description: "Baffle AWS Key"
@@ -308,11 +308,99 @@ Resources:
               Bool:
                 "kms:GrantIsForAWSResource": "true"
 
-  BaffleShieldKeyAlias:
+  BaffleShield1KeyAlias:
     Type: "AWS::KMS::Alias"
     Properties:
-      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key"
-      TargetKeyId: !Ref BaffleShieldKey
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-1"
+      TargetKeyId: !Ref BaffleShield1Key
+
+  BaffleShield2Key:
+    Type: "AWS::KMS::Key"
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield2KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-2"
+      TargetKeyId: !Ref BaffleShield2Key
+
+  BaffleShield3Key:
+    Type: "AWS::KMS::Key"
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield3KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-3"
+      TargetKeyId: !Ref BaffleShield3Key
 
   BaffleEC2SecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -368,7 +456,9 @@ Resources:
           echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
           echo "export KM_AWS_REGION='US_WEST_2'" >> /etc/environment
           echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
-          echo "export KM_KEK_NAME='${BaffleShieldKeyAlias}'" >> /etc/environment
+          echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
+          echo "export KM_KEK_NAME_1='${BaffleShield2KeyAlias}'" >> /etc/environment
+          echo "export KM_KEK_NAME_2='${BaffleShield3KeyAlias}'" >> /etc/environment
           source /etc/environment
           # Setup docker
           sudo service docker start >> output.txt 2>&1
