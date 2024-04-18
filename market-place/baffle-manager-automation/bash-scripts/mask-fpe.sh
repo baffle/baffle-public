@@ -634,6 +634,7 @@ postgres_lower_env_db_creation() {
       birthdate DATE,
       entity_id VARCHAR(20) NOT NULL
   );"
+  alter_table_replica_full_identity="ALTER TABLE customers REPLICA IDENTITY FULL;"
   execution="success"
   # Execute the command for the 'postgres' database
   error_message=$(PGPASSWORD=$db_password psql -v ON_ERROR_STOP=1 -h $db_host_name -p 5432 -U $db_user_name -d postgres -c "$prod_db_create_command" 2>&1)
@@ -657,6 +658,14 @@ postgres_lower_env_db_creation() {
     echo -e "Error message: $error_message"  >&2
     execution="error"
   fi
+
+   # Execute the command for the 'sales' database to full replica
+    error_message=$(PGPASSWORD=$db_password psql -v ON_ERROR_STOP=1 -h $db_host_name -p 5432 -U $db_user_name -d sales -c "$alter_table_replica_full_identity" 2>&1)
+    status_code=$?
+    if [ $status_code -ne 0 ]; then
+      echo -e "Error message: $error_message"  >&2
+      execution="error"
+    fi
 
   # Execute the command for the 'sales_dev' database
   error_message=$(PGPASSWORD=$db_password psql -v ON_ERROR_STOP=1 -h $db_host_name -p 5432 -U $db_user_name -d sales_dev -c "$table_create_command" 2>&1)
