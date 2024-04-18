@@ -350,10 +350,12 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           echo "export USERNAME='${UserEmail}'" >> /etc/environment
-          echo "export PASSWORD='${UserPassword}'" >> /etc/environment
+          UserPasswordEscaped=$(echo "${UserPassword}" | sed 's/#/\\#/g')
+          echo "export PASSWORD='${UserPasswordEscaped}'" >> /etc/environment
           echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
           echo "export DB_USER_NAME='baffle'" >> /etc/environment
-          echo "export DB_PASSWORD='${DBPassword}'" >> /etc/environment
+          DBPasswordEscaped=$(echo "${DBPassword}" | sed 's/#/\\#/g')
+          echo "export DB_PASSWORD='${DBPasswordEscaped}'" >> /etc/environment
           echo "export KM_AWS_REGION='US_WEST_2'" >> /etc/environment
           echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
           echo "export KM_KEK_NAME='${BaffleShieldKeyAlias}'" >> /etc/environment
