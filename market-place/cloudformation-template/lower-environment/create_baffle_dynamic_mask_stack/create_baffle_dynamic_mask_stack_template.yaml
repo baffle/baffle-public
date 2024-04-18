@@ -1,17 +1,17 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Ask user for IP, and user credential for "
+Description: "Ask user for IP, and user credential"
 
 Parameters:
   MyIP:
-    Description: "User IP"
+    Description: "User IP to be whitelisted"
     Type: String
 
   UserEmail:
-    Description: "Email for Baffle Manage user"
+    Description: "Email for Baffle Manage and PGAdmin UI user"
     Type: String
 
   UserPassword:
-    Description: "Password for Baffle Manage user"
+    Description: "Password for Baffle Manage and PGAdmin UI user"
     Type: String
     NoEcho: true
 
@@ -19,6 +19,20 @@ Parameters:
     Description: "Password for RDS Database"
     Type: String
     NoEcho: true
+
+Metadata:
+  Instances:
+    Description: "EC2 Instance that runs the Baffle Services (Shield, Manager, PGAdmin UI)"
+  Databases:
+    Description: "RDS database for source and target"
+  Key:
+    Description: "AWS KMS used for Key Encryption Key (KEK)"
+  S3Bucket:
+    Description: "S3 Bucket used to store Data Encryption Key (DEK)"
+  DMSInstance:
+    Description: "DMS Instance and Task to migrate data"
+  LambdaFunction:
+    Description: "Utility Functions to delete S3 bucket and Start DMS Task"
 
 Resources:
   BaffleVPC:
@@ -142,7 +156,7 @@ Resources:
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
 
-  LambdaLogGroup:
+  DeleteBucketLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
       LogGroupName: !Sub '/aws/lambda/${DeleteBucketLambdaFunction}'
@@ -197,8 +211,8 @@ Resources:
     Properties:
       DBSubnetGroupDescription: "A DB Subnet Group for BaffleDB"
       SubnetIds:
-        - !Ref PublicSubnet1
         - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
 
   BaffleDBSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -257,7 +271,7 @@ Resources:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: "kms:*"
             Resource: "*"
-          - Sid: "Allow use of the key"
+          - Sid: "Allow use of the key by role"
             Effect: Allow
             Principal:
               AWS: !GetAtt BaffleShieldRole.Arn
@@ -293,10 +307,6 @@ Resources:
     Properties:
       GroupDescription: "Security group with specific ports open"
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp:  !Join [ "", [ !Ref MyIP, "/32" ] ]
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
@@ -340,12 +350,10 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           echo "export USERNAME='${UserEmail}'" >> /etc/environment
-           UserPasswordEscaped=$(echo "${UserPassword}" | sed 's/#/\\#/g')
-          echo "export PASSWORD='${UserPasswordEscaped}'" >> /etc/environment
+          echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
           echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
           echo "export DB_USER_NAME='baffle'" >> /etc/environment
-          DBPasswordEscaped=$(echo "${DBPassword}" | sed 's/#/\\#/g')
-          echo "export DB_PASSWORD='${DBPasswordEscaped}'" >> /etc/environment
+          echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
           echo "export KM_AWS_REGION='US_WEST_2'" >> /etc/environment
           echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
           echo "export KM_KEK_NAME='${BaffleShieldKeyAlias}'" >> /etc/environment
@@ -424,6 +432,28 @@ Resources:
               "rule-action": "include"
             }
           ]
+        }
+      ReplicationTaskSettings: |
+        {
+            "FullLoadSettings": {
+                "TargetTablePrepMode": "DROP_AND_CREATE",
+                "CreatePkAfterFullLoad": False,
+                "StopTaskCachedChangesApplied": False,
+                "StopTaskCachedChangesNotApplied": False,
+                "MaxFullLoadSubTasks": 8,
+                "TransactionConsistencyTimeout": 600,
+                "CommitRate": 10000
+            },
+            "ControlTablesSettings": {
+                "historyTimeslotInMinutes": 5,
+                "HistoryTimeslotInMinutes": 5
+            },
+            "ChangeProcessingDdlHandlingPolicy": {
+                "HandleSourceTableDropped": True,
+                "HandleSourceTableTruncated": True,
+                "HandleSourceTableAltered": True
+            },
+            "BeforeImageSettings": null
         }
       ReplicationInstanceArn: !Ref DMSReplicationInstance
 
