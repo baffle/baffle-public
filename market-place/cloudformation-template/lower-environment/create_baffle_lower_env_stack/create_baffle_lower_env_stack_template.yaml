@@ -34,6 +34,18 @@ Metadata:
   LambdaFunction:
     Description: "Utility Functions to delete S3 bucket and Start DMS Task"
 
+Mappings:
+  RegionMap:
+    # Update the AMI later with public AMI from each region
+    us-west-1:
+      AMI: ami-005c2b15429173b7b
+    us-west-2:
+      AMI: ami-005c2b15429173b7b
+    us-east-1:
+      AMI: ami-005c2b15429173b7b
+    us-east-2:
+      AMI: ami-005c2b15429173b7b
+
 Resources:
   BaffleVPC:
     Type: "AWS::EC2::VPC"
@@ -337,7 +349,7 @@ Resources:
     DependsOn: [BaffleDB, BaffleShieldInstanceProfile]
     Properties:
       IamInstanceProfile: !Ref BaffleShieldInstanceProfile
-      ImageId: ami-005c2b15429173b7b
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
       InstanceType: t2.large
       KeyName: !Ref BaffleKeyPair
       NetworkInterfaces:
