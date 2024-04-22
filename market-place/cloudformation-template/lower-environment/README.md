@@ -38,3 +38,18 @@ For example:
 ## Download keypair 
 The keypair for Baffle EC2 instance is stored on SSM and can be downloaded. Following link describes a process of downloading link 
 https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html#create-key-pair-cloudformation
+
+
+## 2. Setting AWS Permissions
+
+This section is optional and not required if you already have administrator roles.
+
+For configuring permissions, we recommend running the provided CloudFormation template. This template will create a policy with the necessary permissions and a group.
+
+Request your AWS administrator to run the below command:
+
+`aws cloudformation create-stack --stack-name baffle-group --template-body file://create_group_policy/create_group_role_template.yaml --capabilities CAPABILITY_NAMED_IAM`
+
+After the group is generated, fetch the group name from the CloudFormation output. Replace {User_Name} with the AWS user's name and {Group_Name_From_Above} with the name of the group you got from the CloudFormation output.
+
+`aws iam add-user-to-group --user-name {User_Name} --group-name {Group_Name_From_Above}`
