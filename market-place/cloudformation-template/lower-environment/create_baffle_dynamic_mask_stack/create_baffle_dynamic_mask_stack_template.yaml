@@ -20,6 +20,18 @@ Parameters:
     Type: String
     NoEcho: true
 
+  WorkFlow:
+    Description: "Setup resource for selected workflow"
+    Type: String
+    Default: "ALL"
+    AllowedValues:
+      - "ALL"
+      - "STATIC_MASK"
+      - "DYNAMIC_MASK"
+      - "CLE"
+      - "RLE"
+      - "DLE"
+
 Metadata:
   Instances:
     Description: "EC2 Instance that runs the Baffle Services (Shield, Manager, PGAdmin UI)"
@@ -459,6 +471,7 @@ Resources:
           echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
           echo "export KM_KEK_NAME_1='${BaffleShield2KeyAlias}'" >> /etc/environment
           echo "export KM_KEK_NAME_2='${BaffleShield3KeyAlias}'" >> /etc/environment
+          echo "export $EXECUTE_WORKFLOW='${WORKFLOW}'" >> /etc/environment
           source /etc/environment
           # Setup docker
           sudo service docker start >> output.txt 2>&1
