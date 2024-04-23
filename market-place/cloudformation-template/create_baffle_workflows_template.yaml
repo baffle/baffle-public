@@ -1,0 +1,603 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Ask user for IP, and user credential"
+
+Parameters:
+  MyIP:
+    Description: "User IP to be whitelisted"
+    Type: String
+
+  UserEmail:
+    Description: "Email for Baffle Manage and PGAdmin UI user"
+    Type: String
+
+  UserPassword:
+    Description: "Password for Baffle Manage and PGAdmin UI user"
+    Type: String
+    NoEcho: true
+
+  DBPassword:
+    Description: "Password for RDS Database"
+    Type: String
+    NoEcho: true
+
+  Workflow:
+    Description: "Setup resource for selected workflow"
+    Type: String
+    Default: "ALL"
+    AllowedValues:
+      - "ALL"
+      - "STATIC_MASK"
+      - "DYNAMIC_MASK"
+      - "CLE"
+      - "RLE"
+      - "DLE"
+
+Metadata:
+  Instances:
+    Description: "EC2 Instance that runs the Baffle Services (Shield, Manager, PGAdmin UI)"
+  Databases:
+    Description: "RDS database for source and target"
+  Key:
+    Description: "AWS KMS used for Key Encryption Key (KEK)"
+  S3Bucket:
+    Description: "S3 Bucket used to store Data Encryption Key (DEK)"
+  DMSInstance:
+    Description: "DMS Instance and Task to migrate data"
+  LambdaFunction:
+    Description: "Utility Functions to delete S3 bucket and Start DMS Task"
+
+Mappings:
+  RegionMap:
+    # Update the AMI later with public AMI from each region
+    us-west-1:
+      AMI: ami-07fb368d206816822
+    us-west-2:
+      AMI: ami-016e0f1d4d1a6fd30
+    us-east-1:
+      AMI: ami-07fb368d206816822
+    us-east-2:
+      AMI: ami-07fb368d206816822
+
+Resources:
+  BaffleVPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+
+  AttachGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref BaffleVPC
+
+  DefaultPublicRoute:
+    Type: "AWS::EC2::Route"
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [ 0, Fn::GetAZs: !Ref "AWS::Region" ]
+
+  PrivateSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [ 1, Fn::GetAZs: !Ref "AWS::Region" ]
+
+  PrivateSubnet2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      CidrBlock: "10.0.3.0/24"
+      AvailabilityZone: !Select [ 0, Fn::GetAZs: !Ref "AWS::Region" ]
+
+  PublicSubnetRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  BaffleKeyStorageBucket:
+    Type: "AWS::S3::Bucket"
+
+  DeleteBucketLambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: LoggingPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+        - PolicyName: S3Policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:List*"
+                  - "s3:DeleteObject"
+                Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
+
+  DeleteBucketLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+          
+          def handler(event, context):
+              print(event)
+              responseData = {}
+              ResponseStatus = cfnresponse.SUCCESS
+              s3bucketName = event['ResourceProperties']['s3bucketName']
+      
+              if event['RequestType'] == 'Delete':
+                  # Need to empty the S3 bucket before it is deleted
+                  s3 = boto3.resource('s3')
+                  bucket = s3.Bucket(s3bucketName)
+                  bucket.objects.all().delete()
+          
+                  responseData['Message'] = "Resource deletion successful!"
+          
+              cfnresponse.send(event, context, ResponseStatus, responseData)
+
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
+
+  DeleteBucketLambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${DeleteBucketLambdaFunction}'
+      RetentionInDays: 3
+
+  CustomResource:
+    Type: "Custom::CustomResource"
+    Properties:
+      ServiceToken: !GetAtt DeleteBucketLambdaFunction.Arn
+      s3bucketName: !Ref BaffleKeyStorageBucket
+    DependsOn: BaffleKeyStorageBucket
+
+  BaffleDBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: "This is a Secrets Manager secret for a DB"
+      SecretString:
+        !Sub |
+        {
+          "username": "baffle",
+          "password": "${DBPassword}"
+        }
+
+  DBParameterGroup:
+    Type: 'AWS::RDS::DBParameterGroup'
+    Properties:
+      Description: "DBParameterGroup to turn of ssl "
+      Family: "postgres15"
+      Parameters:
+        rds.force_ssl: 0
+        rds.logical_replication: 1
+
+  BaffleDB:
+    Type: "AWS::RDS::DBInstance"
+    DeletionPolicy: Delete
+    Properties:
+      DBParameterGroupName: !Ref DBParameterGroup
+      AllocatedStorage: "20"
+      DBInstanceClass: "db.t3.micro"
+      Engine: "postgres"
+      EngineVersion: "15.6"
+      MasterUsername:
+        Fn::Sub: "{{resolve:secretsmanager:${BaffleDBSecret}::username}}"
+      MasterUserPassword:
+        Fn::Sub: "{{resolve:secretsmanager:${BaffleDBSecret}::password}}"
+      DBSubnetGroupName: !Ref BaffleDBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt BaffleDBSecurityGroup.GroupId
+
+  BaffleDBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: "A DB Subnet Group for BaffleDB"
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  BaffleDBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      GroupDescription: "Baffle DB Security Group"
+
+  BaffleDBSecurityGroupIngressFromSameVPC:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties:
+      GroupId: !GetAtt BaffleDBSecurityGroup.GroupId
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      CidrIp: !GetAtt BaffleVPC.CidrBlock
+
+  BaffleShieldRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: AccessBaffleDBSecret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "secretsmanager:GetSecretValue"
+                Resource: !Ref BaffleDBSecret
+        - PolicyName: AccessScriptBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "s3:*"
+                Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
+
+  BaffleShield1Key:
+    Type: "AWS::KMS::Key"
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield1KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-1"
+      TargetKeyId: !Ref BaffleShield1Key
+
+  BaffleShield2Key:
+    Type: "AWS::KMS::Key"
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield2KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-2"
+      TargetKeyId: !Ref BaffleShield2Key
+
+  BaffleShield3Key:
+    Type: "AWS::KMS::Key"
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield3KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-3"
+      TargetKeyId: !Ref BaffleShield3Key
+
+  BaffleEC2SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Security group with specific ports open"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+        - IpProtocol: tcp
+          FromPort: 8446
+          ToPort: 8446
+          CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: !GetAtt BaffleVPC.CidrBlock
+      VpcId: !Ref BaffleVPC
+
+  BaffleShieldInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Roles:
+        - !Ref BaffleShieldRole
+
+  BaffleKeyPair:
+    Type: "AWS::EC2::KeyPair"
+    Properties:
+      KeyName: !Join [ "-", [ !Ref "AWS::StackName", "key-pair" ] ]
+
+  BaffleEC2Instance:
+    Type: "AWS::EC2::Instance"
+    DependsOn: [BaffleDB, BaffleShieldInstanceProfile]
+    Properties:
+      IamInstanceProfile: !Ref BaffleShieldInstanceProfile
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      InstanceType: t2.large
+      KeyName: !Ref BaffleKeyPair
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref PublicSubnet1
+          AssociatePublicIpAddress: true
+          GroupSet:
+            - !GetAtt BaffleEC2SecurityGroup.GroupId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "export USERNAME='${UserEmail}'" >> /etc/environment
+          echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+          echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
+          echo "export DB_USER_NAME='baffle'" >> /etc/environment
+          echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+          echo "export KM_AWS_REGION='US_WEST_2'" >> /etc/environment
+          echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
+          echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
+          echo "export KM_KEK_NAME_1='${BaffleShield2KeyAlias}'" >> /etc/environment
+          echo "export KM_KEK_NAME_2='${BaffleShield3KeyAlias}'" >> /etc/environment
+          echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+          source /etc/environment
+          # Setup docker
+          sudo service docker start >> output.txt 2>&1
+          cd /home/ec2-user
+          wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/bm-automated-workflows.sh
+          chmod +x bm-automated-workflows.sh >> output.txt 2>&1
+          sudo ./bm-automated-workflows.sh >> output.txt 2>&1
+
+  DMSReplicationSubnetGroup:
+    Type: "AWS::DMS::ReplicationSubnetGroup"
+    Properties:
+      ReplicationSubnetGroupDescription: "DMS Replication Subnet group"
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  DMSReplicationInstance:
+    Type: "AWS::DMS::ReplicationInstance"
+    DependsOn: BaffleEC2Instance
+    Properties:
+      ReplicationInstanceIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance" ] ]
+      ReplicationInstanceClass: "dms.t3.small"
+      AllocatedStorage: 20
+      VpcSecurityGroupIds:
+        - !GetAtt BaffleEC2SecurityGroup.GroupId
+      ReplicationSubnetGroupIdentifier: !Ref DMSReplicationSubnetGroup
+      PubliclyAccessible: false
+
+  DMSSourceEndpoint:
+    Type: "AWS::DMS::Endpoint"
+    Properties:
+      EndpointIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance-source-endpoint" ] ]
+      EndpointType: "source"
+      EngineName: "postgres"
+      Username: "baffle"
+      Password: !Ref DBPassword
+      ServerName: !GetAtt BaffleDB.Endpoint.Address
+      Port: 5432
+      DatabaseName: "sales"
+      SslMode: "require"
+
+  DMSTargetEndpoint:
+    Type: "AWS::DMS::Endpoint"
+    Properties:
+      EndpointIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance-target-endpoint" ] ]
+      EndpointType: "target"
+      EngineName: "postgres"
+      Username: "baffle"
+      Password: !Ref DBPassword
+      ServerName: !GetAtt BaffleEC2Instance.PublicDnsName
+      Port: 5432
+      DatabaseName: "sales_dev"
+      SslMode: "none"
+
+  DMSMigrationTask:
+    Type: "AWS::DMS::ReplicationTask"
+    Properties:
+      ReplicationTaskIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance-task" ] ]
+      SourceEndpointArn: !Ref DMSSourceEndpoint
+      TargetEndpointArn: !Ref DMSTargetEndpoint
+      MigrationType: "full-load-and-cdc"
+      TableMappings: |
+        {
+          "rules": [
+            {
+              "rule-type": "selection",
+              "rule-id": "1",
+              "rule-name": "1",
+              "object-locator": {
+                "schema-name": "%",
+                "table-name": "%"
+              },
+              "rule-action": "include"
+            }
+          ]
+        }
+      ReplicationTaskSettings: |
+        {
+            "FullLoadSettings": {
+                "TargetTablePrepMode": "DROP_AND_CREATE",
+                "CreatePkAfterFullLoad": False,
+                "StopTaskCachedChangesApplied": False,
+                "StopTaskCachedChangesNotApplied": False,
+                "MaxFullLoadSubTasks": 8,
+                "TransactionConsistencyTimeout": 600,
+                "CommitRate": 10000
+            },
+            "ControlTablesSettings": {
+                "historyTimeslotInMinutes": 5,
+                "HistoryTimeslotInMinutes": 5
+            },
+            "ChangeProcessingDdlHandlingPolicy": {
+                "HandleSourceTableDropped": True,
+                "HandleSourceTableTruncated": True,
+                "HandleSourceTableAltered": True
+            },
+            "BeforeImageSettings": null
+        }
+      ReplicationInstanceArn: !Ref DMSReplicationInstance
+
+Outputs:
+
+  StackRegion:
+    Description: "Stack Region"
+    Value: !Ref "AWS::Region"
+
+  BaffleEC2SecurityGroup:
+    Description: "Baffle Service Security Group"
+    Value: !Join [ "", [ "https://", !Ref "AWS::Region", ".console.aws.amazon.com/ec2/home?region=",  !Ref "AWS::Region", "#SecurityGroups:search=", !Ref BaffleEC2SecurityGroup ] ]
+
+  BaffleManagerURL:
+    Description: "The URL for Baffle Manager"
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName ] ]
+
+  PGAdminURL:
+    Description: "The URL for PG Admin Console"
+    Value: !Join [ "", [ "http://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8446" ] ]
+
+  DMSMigrationTaskURL:
+    Description: "URL for the DMS migration task"
+    Value: !Join [ "", [ "https://", !Ref "AWS::Region", ".console.aws.amazon.com/dms/v2/home?region=",  !Ref "AWS::Region", "#taskDetails/", !Ref "AWS::StackName", "-replication-instance-task" ] ]
+
+  StartMigrationTask:
+    Description: "Command to start DMS migration task"
+    Value: !Join [ "", [ "aws dms start-replication-task --replication-task-arn ", !Ref DMSMigrationTask, " --start-replication-task-type start-replication" ] ]
+
+  StopMigrationTask:
+    Description: "Command to stop DMS migration task"
+    Value: !Join [ "", [ "aws dms stop-replication-task --replication-task-arn ", !Ref DMSMigrationTask ] ]
