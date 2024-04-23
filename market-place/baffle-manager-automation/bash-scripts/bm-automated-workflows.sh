@@ -1,0 +1,2077 @@
+#!/bin/bash
+
+# Input parameters
+username=$USERNAME
+password=$PASSWORD
+# Database info
+db_host_name=$DB_HOST_NAME
+db_port=5432
+db_user_name=$DB_USER_NAME
+db_password=$DB_PASSWORD
+#Keystore info
+aws_region=$KM_AWS_REGION
+s3_bucket_name=$KM_S3_BUCKET_NAME
+# Kek info
+kek_name=$KM_KEK_NAME
+kek_name_1=$KM_KEK_NAME_1
+kek_name_2=$KM_KEK_NAME_2
+
+execute_workflow=$EXECUTE_WORKFLOW
+
+# Base URL
+base_url="https://localhost:443"
+
+# Login API URL
+checkAppUrl="$base_url/api/public/v2/application_access_check"
+registration_url="$base_url/api/public/v2/init"
+login_url="$base_url/api/public/v2/auth"
+
+db_proxy_url="$base_url/api/v2/svc/database-proxies"
+database_url="$base_url/api/v2/databases"
+aws_kms_url="$base_url/api/v2/keystores/awskms"
+kek_url="$base_url/api/v2/key-management/keks"
+data_source_url="$base_url/api/v2/data-sources"
+dpp_url="$base_url/api/v2/dpp"
+fpe_decimal_url="$base_url/api/v2/encryption-policies/FPE_DECIMAL"
+fpe_cc_url="$base_url/api/v2/encryption-policies/FPE_CREDIT_CARD"
+user_group_url="$base_url/api/v2/data-access-control/user-groups"
+tenant_url="$base_url/api/v2/key-management/tenants"
+
+# Shield Hosts
+postgres_shield_image=baffle-shield-postgresql-v4:Release-Baffle.2.8.3.8.1
+txn_logger_image=baffle-txn-logger:Release-Baffle.2.8.2.8
+shield_static_mask_folder="Baffle-Shield-Postgresql-Static-Mask"
+shield_static_mask_host="shield_static_mask"
+shield_static_mask_port=5432
+shield_static_mask_txn_port=9500
+shield_dynamic_mask_folder="Baffle-Shield-Postgresql-Dynamic-Mask"
+shield_dynamic_mask_host="shield_dynamic_mask"
+shield_dynamic_mask_port=5433
+shield_dynamic_mask_txn_port=9501
+shield_cle_folder="Baffle-Shield-Postgresql-CLE"
+shield_cle_host="shield_cle"
+shield_cle_port=5434
+shield_cle_txn_port=9502
+shield_rle_folder="Baffle-Shield-Postgresql-RLE"
+shield_rle_host="shield_rle"
+shield_rle_port=5435
+shield_rle_txn_port=9503
+shield_dle_folder="Baffle-Shield-Postgresql-DLE"
+shield_dle_host="shield_dle"
+shield_dle_port=5436
+shield_dle_txn_port=9504
+
+# Database Table Creation SQL Commands
+customers_table_create_command="CREATE TABLE customers (
+      uuid VARCHAR(40),
+      first_name VARCHAR(50),
+      ccn VARCHAR(50),
+      ssn VARCHAR(50),
+      entity_id VARCHAR(50)
+
+  );"
+
+# Function to send a GET request and process the response
+send_get_request() {
+  local jwt_token=$1
+  local url=$2
+
+
+  # Send the GET request
+  local response=$(curl -k -s -w "\n%{http_code}" -X GET -H "Content-Type: application/json" -H "Authorization: Bearer $jwt_token" "$url")
+
+  # Extract the status code from the last line
+  local status_code=$(echo "$response" | tail -n1)
+
+  # Remove the status code from the response
+  response=$(echo "$response" | sed '$d')
+
+  # Check if the status code is 200
+  if [ "$status_code" -eq 200 ]; then
+    # Parse the id from the response
+    local id=$(echo "$response" | jq -r '.id')
+    echo "$id"
+  else
+    echo "Request failed with status code: $status_code" >&2
+    echo "error"
+  fi
+}
+
+# Function to send a POST request and process the response
+send_post_request() {
+  local jwt_token=$1
+  local url=$2
+  local payload=$3
+  local fields=("$@") # Capture all arguments into an array
+  unset fields[0] fields[1] fields[2] # Remove the first three arguments which are jwt_token, url, and payload
+  # Send the POST request
+  # if jwt_token is null, then no need to pass Authorization header
+  if [ "$jwt_token" == "null" ]; then
+    local response=$(curl -k -s -w "\n%{http_code}" -X POST -H "Content-Type: application/json" -d "$payload" "$url")
+  else
+    local response=$(curl -k -s -w "\n%{http_code}" -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $jwt_token" -d "$payload" "$url")
+  fi
+
+  # Extract the status code from the last line
+  local status_code=$(echo "$response" | tail -n1)
+
+  # Remove the status code from the response
+  response=$(echo "$response" | sed '$d')
+
+# Check if the status code is 200 or 201 or 204
+  if [ "$status_code" -eq 200 ] || [ "$status_code" -eq 201 ] || [ "$status_code" -eq 204 ]; then
+    # Parse the fields from the response
+    local parsed_fields=""
+    for i in "${!fields[@]}"; do
+      local value=$(echo "$response" | jq -r --arg field "${fields[$i]}" '.[$field]')
+      # If it's the last element, don't add a space
+      if (( i == ${#fields[@]}-1 )) || (( ${#fields[@]} == 1 )); then
+        parsed_fields+="$value"
+      else
+        parsed_fields+="$value "
+      fi
+    done
+    echo "$parsed_fields"
+  else
+    echo "Request to $url failed with status code: $status_code" >&2
+    echo "error"
+  fi
+}
+# Get Database payload
+get_database_payload(){
+database_payload=$(jq -n \
+                  --arg hn "$db_host_name" \
+                  --argjson p "$db_port" \
+                  --arg un "$db_user_name" \
+                  --arg pw "$db_password" \
+                  '{
+                    "name": "PostgresSQL",
+                    "dbType": "POSTGRES",
+                    "hostname": $hn,
+                    "port": $p,
+                    "dbUsername": $un,
+                    "dbPassword": {
+                      "secretStoreType": "CLEAR",
+                      "secretValue": $pw
+                    }
+                  }')
+  echo "$database_payload"
+}
+
+# Get AWS KMS payload
+get_aws_kms_payload(){
+  # convert from AWS region to java enum
+  declare -A region_map=(
+  ["us-east-1"]="US_EAST_1"
+  ["us-east-2"]="US_EAST_2"
+  ["us-west-1"]="US_WEST_1"
+  ["us-west-2"]="US_WEST_2"
+  ["ap-south-1"]="AP_SOUTH_1"
+  ["ap-northeast-1"]="AP_NORTHEAST_1"
+  ["ap-northeast-2"]="AP_NORTHEAST_2"
+  ["ap-southeast-1"]="AP_SOUTHEAST_1"
+  ["ap-southeast-2"]="AP_SOUTHEAST_2"
+  ["ca-central-1"]="CA_CENTRAL_1"
+  ["eu-central-1"]="EU_CENTRAL_1"
+  ["eu-west-1"]="EU_WEST_1"
+  ["eu-west-2"]="EU_WEST_2"
+  ["eu-west-3"]="EU_WEST_3"
+  ["eu-north-1"]="EU_NORTH_1"
+  ["sa-east-1"]="SA_EAST_1"
+  ["us-gov-east-1"]="US_GOV_EAST_1"
+  ["us-gov-west-1"]="US_GOV_WEST_1"
+  )
+
+  aws_region=${region_map[$aws_region]:-"US_WEST_2"}
+  aws_kms_payload=$(jq -n \
+                  --arg awsRegion "$aws_region" \
+                  --arg bucketName "$s3_bucket_name" \
+                  '{
+                    "name": "aws-kms",
+                    "kmsType": "AWS_KMS",
+                    "awsRegion": $awsRegion,
+                    "dekStoreType": "S3",
+                    "s3StorePayload": {
+                      "sseSupported": false,
+                      "bucketName": $bucketName
+                    },
+                    "authenticationMethod": "IAM_ROLE"
+                  }')
+
+  echo "$aws_kms_payload"
+}
+
+# Get KEK payload
+get_kek_payload(){
+  name=$1
+  kestore_id=$2
+  kek_payload=$(jq -n \
+                --arg name "$name" \
+                --arg kestore_id "$kestore_id" \
+                '{
+                  "name": $name,
+                  "keystore": {
+                    "id": $kestore_id
+                  },
+                  "createNewDek": false,
+                  "dekFilePrefix": ("baffle-" + $name)
+                }')
+
+  echo "$kek_payload"
+}
+
+# Get DEK payload
+get_dek_payload(){
+  kek_id=$1
+  random_number=$((RANDOM % 1000 + 1)) # Generate a random number between 1 and 100
+  dek_payload=$(jq -n \
+                    --arg kek_id "$kek_id" \
+                    --argjson random_number "$random_number" \
+                    '{
+                      "name": ("baffle-dek-" + ($random_number|tostring)),
+                      "kek": {
+                        "id": $kek_id
+                      }
+                    }')
+  echo "$dek_payload"
+}
+# GET Data Source payload
+get_ds_payload(){
+  name=$1
+  database_id=$2
+  database_name=$3
+  schema_name=$4
+  table_name=$5
+  columns=("${@:6}")  # Capture all arguments starting from the 6th into an array
+
+  # Start building the JSON payload
+  ds_payload=$(jq -n \
+                --arg name "$name" \
+                --arg database_id "$database_id" \
+                --arg database_name "$database_name" \
+                --arg schema_name "$schema_name" \
+                --arg table_name "$table_name" \
+                '{
+                  "name": $name,
+                  "type": "DB_COLUMN",
+                  "dbColumn": {
+                    "databaseRef": {
+                      "id": $database_id
+                    },
+                    "databases": [
+                      {
+                        "name": $database_name,
+                        "schemas": [
+                          {
+                            "name": $schema_name,
+                            "tables": [
+                              {
+                                "name": $table_name,
+                                "columns": []
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }')
+
+  # Loop over the columns and add them to the JSON payload
+  for column_name in "${columns[@]}"; do
+    ds_payload=$(echo "$ds_payload" | jq --arg column_name "$column_name" '.dbColumn.databases[0].schemas[0].tables[0].columns += [{"name": $column_name, "datatype": "varchar(20)", "objectType": "TABLE", "verified": true}]')
+  done
+
+  echo "$ds_payload"
+}
+#get_ds_payload(){
+#  name=$1
+#  database_id=$2
+#  database_name=$3
+#  schema_name=$4
+#  table_name=$5
+#  column_name=$6
+#  ds_payload=$(jq -n \
+#                --arg name "$name" \
+#                --arg database_id "$database_id" \
+#                --arg database_name "$database_name" \
+#                --arg schema_name "$schema_name" \
+#                --arg table_name "$table_name" \
+#                --arg column_name "$column_name" \
+#                '{
+#                  "name": $name,
+#                  "type": "DB_COLUMN",
+#                  "dbColumn": {
+#                    "databaseRef": {
+#                      "id": $database_id
+#                    },
+#                    "databases": [
+#                      {
+#                        "name": $database_name,
+#                        "schemas": [
+#                          {
+#                            "name": $schema_name,
+#                            "tables": [
+#                              {
+#                                "name": $table_name,
+#                                "columns": [
+#                                  {
+#                                    "name": $column_name,
+#                                    "datatype": "varchar(20)",
+#                                    "objectType": "TABLE",
+#                                    "verified": true
+#                                  }
+#                                ]
+#                              }
+#                            ]
+#                          }
+#                        ]
+#                      }
+#                    ]
+#                  }
+#                }')
+#
+#  echo "$ds_payload"
+#}
+# Get User Group payload
+get_user_group_payload() {
+  local name=$1
+  local users=("$@") # Capture all arguments into an array
+  unset users[0] # Remove the first argument which is the name
+
+  # Convert the array into a JSON array
+  local json_users=$(printf '"%s",' "${users[@]}")
+  json_users="[${json_users%,}]"
+
+  user_group_payload=$(jq -n \
+                    --arg name "$name" \
+                    --arg json_users "$json_users" \
+                    '{
+                      "name": $name,
+                      "users": $json_users|fromjson
+                    }')
+
+  echo "$user_group_payload"
+}
+# Get ssn data protection policy payload
+get_ssn_fpe_dpp_payload(){
+  data_source_id=$1
+  kek_id=$2
+  dek_id=$3
+  fpe_decimal_id=$4
+
+  ssn_dpp_payload=$(jq -n \
+                  --arg data_source_id "$data_source_id" \
+                  --arg fpe_decimal_id "$fpe_decimal_id" \
+                  --arg kek_id "$kek_id" \
+                  --arg dek_id "$dek_id" \
+                  '{
+                    "name": "ssn-fpe-decimal",
+                    "dataSources": [
+                      {
+                        "id": $data_source_id
+                      }
+                    ],
+                    "encryption": {
+                      "encryptionType": "FPE",
+                      "encryptionKeyMode": "GLOBAL",
+                      "fpeEncryption": {
+                        "fpeFormats": [
+                          {
+                            "id": $fpe_decimal_id,
+                            "format": "fpe-decimal",
+                            "datatype": "varchar"
+                          }
+                        ],
+                        "globalKey": {
+                          "kek": {
+                            "id": $kek_id
+                          },
+                          "dek": {
+                            "id": $dek_id
+                          }
+                        }
+                      }
+                    }
+                  }')
+
+  echo "$ssn_dpp_payload"
+}
+
+# Get ccn data protection policy payload
+get_ccn_fpe_dpp_payload(){
+  data_source_id=$1
+  kek_id=$2
+  dek_id=$3
+  fpe_cc_id=$4
+  support_user_group_id=$5
+  ccn_access_dpp_payload=$(jq -n \
+                        --arg data_source_id "$data_source_id" \
+                        --arg fpe_cc_id "$fpe_cc_id" \
+                        --arg kek_id "$kek_id" \
+                        --arg dek_id "$dek_id" \
+                        '{
+                          "name": "ccn-fpe-cc",
+                          "dataSources": [
+                            {
+                              "id": $data_source_id
+                            }
+                          ],
+                          "encryption": {
+                            "encryptionType": "FPE",
+                            "encryptionKeyMode": "GLOBAL",
+                            "fpeEncryption": {
+                                "fpeFormats": [
+                                  {
+                                    "id": $fpe_cc_id,
+                                    "format": "fpe-cc",
+                                    "datatype": "varchar"
+                                  }
+                                ],
+                                "globalKey": {
+                                  "kek": {
+                                    "id": $kek_id
+                                  },
+                                  "dek": {
+                                    "id": $dek_id
+                                  }
+                                }
+                            }
+                          }
+                        }')
+
+  echo "$ccn_access_dpp_payload"
+}
+
+# Get ssn data protection with access policy payload
+get_ssn_fpe_access_dpp_payload(){
+  data_source_id=$1
+  kek_id=$2
+  dek_id=$3
+  fpe_decimal_id=$4
+  admin_user_group_id=$5
+  support_user_group_id=$6
+  hr_user_group_id=$7
+
+  ssn_access_dpp_payload=$(jq -n \
+                        --arg data_source_id "$data_source_id" \
+                        --arg fpe_decimal_id "$fpe_decimal_id" \
+                        --arg kek_id "$kek_id" \
+                        --arg dek_id "$dek_id" \
+                        --arg support_user_group_id "$support_user_group_id" \
+                        --arg hr_user_group_id "$hr_user_group_id" \
+                        --arg admin_user_group_id "$admin_user_group_id" \
+                        '{
+                          "name": "ssn-fpe-decimal-access",
+                          "dataSources": [
+                            {
+                              "id": $data_source_id,
+                              "name": "user-pii"
+                            }
+                          ],
+                          "encryption": {
+                            "encryptionType": "FPE",
+                            "encryptionKeyMode": "GLOBAL",
+                            "fpeEncryption": {
+                                "fpeFormats": [
+                                  {
+                                    "id": $fpe_decimal_id,
+                                    "format": "fpe-decimal",
+                                    "datatype": "varchar"
+                                  }
+                                ],
+                                "globalKey": {
+                                  "kek": {
+                                    "id": $kek_id
+                                  },
+                                  "dek": {
+                                    "id": $dek_id
+                                  }
+                                }
+                            }
+                          },
+                          "accessControl": {
+                           "databaseProxy": {
+                             "defaultPermission": "MASK",
+                             "defaultMasks": [
+                               {
+                                 "datatype": "varchar",
+                                 "type": "FIXED",
+                                 "value": "**confidential**"
+                               }
+                             ],
+                             "userGroupPayloads": [
+                               {
+                                 "userGroup": {
+                                   "id": $support_user_group_id
+                                 },
+                                 "permission": "MASK",
+                                 "masks": [
+                                   {
+                                     "datatype": "varchar",
+                                     "type": "PATTERN",
+                                     "value": "ddd-dd-vvvv"
+                                   }
+                                 ]
+                               },
+                               {
+                                 "userGroup": {
+                                   "id": $hr_user_group_id
+                                 },
+                                 "permission": "READ",
+                                 "masks": []
+                               },
+                               {
+                                 "userGroup": {
+                                   "id": $admin_user_group_id
+                                 },
+                                 "permission": "READ_WRITE",
+                                 "masks": []
+                               }
+                             ]
+                           }
+                          }
+                        }')
+
+  echo "$ssn_access_dpp_payload"
+}
+# Get ccn data protection with access policy payload
+get_ccn_fpe_access_dpp_payload(){
+  data_source_id=$1
+  kek_id=$2
+  dek_id=$3
+  fpe_cc_id=$4
+  admin_user_group_id=$5
+  support_user_group_id=$6
+
+  ccn_access_dpp_payload=$(jq -n \
+                        --arg data_source_id "$data_source_id" \
+                        --arg fpe_cc_id "$fpe_cc_id" \
+                        --arg kek_id "$kek_id" \
+                        --arg dek_id "$dek_id" \
+                        --arg support_user_group_id "$support_user_group_id" \
+                        --arg admin_user_group_id "$admin_user_group_id" \
+                        '{
+                          "name": "ccn-fpe-cc-access",
+                          "dataSources": [
+                            {
+                              "id": $data_source_id,
+                              "name": "user-pii"
+                            }
+                          ],
+                          "encryption": {
+                            "encryptionType": "FPE",
+                            "encryptionKeyMode": "GLOBAL",
+                            "fpeEncryption": {
+                                "fpeFormats": [
+                                  {
+                                    "id": $fpe_cc_id,
+                                    "format": "fpe-cc",
+                                    "datatype": "varchar"
+                                  }
+                                ],
+                                "globalKey": {
+                                  "kek": {
+                                    "id": $kek_id
+                                  },
+                                  "dek": {
+                                    "id": $dek_id
+                                  }
+                                }
+                            }
+                          },
+                          "accessControl": {
+                           "databaseProxy": {
+                             "defaultPermission": "MASK",
+                             "defaultMasks": [
+                               {
+                                 "datatype": "varchar",
+                                 "type": "FIXED",
+                                 "value": "**confidential**"
+                               }
+                             ],
+                             "userGroupPayloads": [
+                               {
+                                 "userGroup": {
+                                   "id": $support_user_group_id
+                                 },
+                                 "permission": "MASK",
+                                 "masks": [
+                                   {
+                                     "datatype": "varchar",
+                                     "type": "PATTERN",
+                                     "value": "XXXX-XXXX-XXXX-vvvv"
+                                   }
+                                 ]
+                               },
+                               {
+                                 "userGroup": {
+                                   "id": $admin_user_group_id
+                                 },
+                                 "permission": "READ_WRITE",
+                                 "masks": []
+                               }
+                             ]
+                           }
+                          }
+                        }')
+
+  echo "$ccn_access_dpp_payload"
+}
+
+# Get SSN CCN DPP payload with Ctr cmode
+get_ssn_ccn_ctr_dpp_payload(){
+
+  payload=$(jq -n \
+          --arg name "$1" \
+          --arg ssn_access_dpp_id "$2" \
+          --arg ccn_access_dpp_id "$3" \
+          --arg kek_id "$4" \
+          --arg dek_id "$5" \
+          '{
+            "name": $name,
+            "dataSources": [
+              {
+                "id": $ssn_access_dpp_id
+              },
+              {
+                "id": $ccn_access_dpp_id
+              }
+            ],
+            "encryption": {
+              "encryptionType": "TRADITIONAL",
+              "encryptionKeyMode": "GLOBAL",
+              "traditionalEncryption": {
+                "encryptionFormat": "AES_CTR_DET",
+                "globalKey": {
+                  "kek": {
+                    "id": $kek_id
+                  },
+                  "dek": {
+                    "id": $dek_id
+                  }
+                }
+              }
+            }
+          }')
+
+  echo "$payload"
+}
+# Get SSN CCN RLE DPP payload with Ctr cmode
+get_ssn_ccn_rle_dpp_payload(){
+
+  payload=$(jq -n \
+          --arg name "$1" \
+          --arg ssn_access_dpp_id "$2" \
+          --arg ccn_access_dpp_id "$3" \
+          --arg database_name "$4" \
+          --arg tenant1_id "$5" \
+          --arg tenant2_id "$6" \
+          '{
+            "name": $name,
+            "dataSources": [
+              {
+                "id": $ssn_access_dpp_id
+              },
+              {
+                "id": $ccn_access_dpp_id
+              }
+            ],
+            "encryption": {
+              "encryptionType": "TRADITIONAL",
+              "encryptionKeyMode": "MULTI_TENANT",
+              "traditionalEncryption": {
+                "encryptionFormat": "AES_CTR_DET",
+                "multiTenantKey": {
+                  "tenantColumns": [
+                    {
+                      "name": $database_name,
+                      "schemas": [
+                        {
+                          "name": "public",
+                          "tables": [
+                            {
+                              "name": "customers",
+                              "columns": [
+                                {
+                                  "name": "entity_id",
+                                  "datatype": "varchar(50)",
+                                  "objectType": "TABLE"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "tenants": [
+                    {
+                      "id": $tenant1_id
+                    },
+                    {
+                      "id": $tenant2_id
+                    }
+                  ],
+                  "tenantDetermination": "TENANT_COLUMNS"
+                }
+              }
+            }
+          }')
+
+  echo "$payload"
+}
+
+# Get SSN CCN RLE DPP payload with Ctr cmode
+get_ssn_ccn_dle_dpp_payload(){
+
+  payload=$(jq -n \
+          --arg name "$1" \
+          --arg t1_ds_id "$2" \
+          --arg t2_ds_id "$3" \
+          --arg tenant1_id "$4" \
+          --arg tenant2_id "$5" \
+          '{
+             "name": $name,
+             "dataSources": [
+               {
+                 "id": $t1_ds_id
+               },
+               {
+                 "id": $t2_ds_id
+               }
+             ],
+             "encryption": {
+               "encryptionType": "TRADITIONAL",
+               "encryptionKeyMode": "MULTI_TENANT",
+               "traditionalEncryption": {
+                 "encryptionFormat": "AES_CTR_DET",
+                 "multiTenantKey": {
+                   "tenantColumns": [],
+                   "tenants": [
+                     {
+                       "id": $tenant1_id
+                     },
+                     {
+                       "id": $tenant2_id
+                     }
+                   ],
+                   "tenantDetermination": "DB_NAME"
+                 }
+               }
+             }
+           }')
+
+  echo "$payload"
+}
+
+# Get Tenant payload
+get_tenant_payload(){
+  name=$1
+  identifier=$2
+  keystore=$3
+  kek=$4
+  dek_name=$5
+
+  tenant_payload=$(jq -n \
+                --arg name "$name" \
+                --arg identifier "$identifier" \
+                --arg keystore "$keystore" \
+                --arg kek "$kek" \
+                --arg dek_name "$dek_name" \
+                '{
+                  "name": $name,
+                  "identifier": $identifier,
+                  "keystore": {
+                    "id": $keystore
+                  },
+                  "kek": {
+                    "id": $kek
+                  },
+                  "dekName": $dek_name
+                }')
+
+  echo "$tenant_payload"
+}
+
+# Get DB Proxy payload
+get_db_proxy_payload(){
+  db_proxy_access_payload=$(jq -n \
+                        --arg name "$1" \
+                        --arg database_id "$2" \
+                        --arg aws_kms_id "$3" \
+                        --arg kek_id "$4" \
+                        '{
+                          "name": $name,
+                          "database": {
+                            "id": $database_id
+                          },
+                          "keystore": {
+                            "id": $aws_kms_id
+                          },
+                          "kek": {
+                            "id": $kek_id
+                          },
+                          "encryption": true
+                        }')
+
+  echo "$db_proxy_access_payload"
+}
+get_proxy_configuration_payload(){
+  local name=$1
+  local type=$2
+  local port=$3
+  if [ "$type" == "RBAC_PORT" ]; then
+    proxy_configuration_payload=$(jq -n \
+                        --arg name "$name" \
+                        --argjson port "$port" \
+                        '{
+                           "name": $name,
+                           "debugLevel": "NONE",
+                           "rbacConfig": {
+                             "mode": "SUPPORTED",
+                             "userDetermination": "SESSION",
+                             "enabled": true
+                           },
+                           "advancedConfig": {
+                              "baffleshield.clientPort": $port
+                            }
+                         }')
+  elif [ "$type" == "RLE_PORT" ]; then
+    proxy_configuration_payload=$(jq -n \
+                         --arg name "$name" \
+                         --argjson port "$port" \
+                        '{
+                          "name": $name,
+                          "debugLevel": "NONE",
+                          "rleConfig": {
+                            "enabled": true,
+                            "tenantDetermination": "TENANT_COLUMNS"
+                          },
+                          "advancedConfig": {
+                             "baffleshield.clientPort": $port
+                           }
+                        }')
+  elif [ "$type" == "DLE_PORT" ]; then
+    proxy_configuration_payload=$(jq -n \
+                         --arg name "$name" \
+                         --argjson port "$port" \
+                        '{
+                          "name": $name,
+                          "debugLevel": "NONE",
+                          "dleConfig": {
+                            "enabled": true
+                          },
+                          "advancedConfig": {
+                             "baffleshield.clientPort": $port
+                           }
+                        }')
+  elif [ "$type" == "PORT" ]; then
+    proxy_configuration_payload=$(jq -n \
+                         --arg name "$name" \
+                         --argjson port "$port" \
+                        '{
+                          "name": $name,
+                          "advancedConfig": {
+                            "baffleshield.clientPort": $port
+                          }
+                        }')
+  fi
+
+  echo "$proxy_configuration_payload"
+
+}
+
+# get Deployment payload
+get_deploy_payload(){
+  name=$1
+  dpp_ids=("$@")  # Capture all arguments into an array
+  # remove name from the array
+  unset dpp_ids[0]
+  added_policies="["
+
+  # Loop over the DPP IDs and add them to the JSON string
+  for id in "${dpp_ids[@]}"; do
+    added_policies+="{\"id\": \"$id\"},"
+  done
+
+  # Remove the trailing comma and close the JSON string
+  added_policies=${added_policies%?}
+  added_policies+="]"
+
+
+ deploy_payload=$(jq -n \
+                --arg name "$1" \
+                --argjson added_policies "$added_policies" \
+                '{
+                  "name": $name,
+                  "type": "DATA_POLICIES",
+                  "mode": "ADD_POLICIES",
+                  "dataPolicies": {
+                    "addedDataPolicies": $added_policies
+                  }
+                }')
+
+  echo "$deploy_payload"
+}
+
+# Get system admin registration payload
+get_registration_payload(){
+  registration_payload=$(jq -n \
+                      --arg username "$username" \
+                      --arg password "$password" \
+                      '{
+                        "initPassword": "baffle123",
+                        "orgName": "baffle",
+                        "allowedDomains": ["baffle.io"],
+                        "email": $username,
+                        "firstName": "admin",
+                        "lastName": "t",
+                        "password": $password
+                      }')
+
+  echo "$registration_payload"
+}
+
+
+# Function to check if the BM REST API service is up and running
+check_application(){
+  # Counter for the number of retries
+  counter=0
+  while [ $counter -lt 10 ]; do
+    # Send a request to the REST API endpoint and store the HTTP status code
+    ssn_status_code=$(curl -k --write-out "%{http_code}\n" --silent --output /dev/null "$checkAppUrl")
+    # If the HTTP status code is 200, print a success message and exit the loop
+    if [ "$ssn_status_code" -eq 200 ]; then
+      echo "BM REST API service is up and running."
+      break
+    fi
+    # If the HTTP status code is not 200, print a retry message and wait for the specified time interval before the next retry
+    echo "BM REST API service is not responding. Retrying in 30 seconds..." >&2
+    sleep 30
+    ((counter++))
+  done
+  # If the maximum number of retries has been reached, print an error message
+  if [ $counter -eq 10 ]; then
+    echo "BM REST API service is not responding after 5 minutes. Exiting script." >&2
+    echo "error"
+  else
+    echo "BM REST API service is up and running."
+    echo "success"
+  fi
+}
+
+# Get Login payload
+get_login_payload(){
+  login_payload=$(jq -n \
+                --arg password "$password" \
+                --arg username "$username" \
+                '{
+                  "password": $password,
+                  "username": $username
+                }')
+
+  echo "$login_payload"
+}
+
+
+
+
+start_postgres_proxy(){
+  access_syncId=$1
+  folder_path=$2
+  service_name=$3
+  port=$4
+  txn_logger_port=$5
+  # create folder if it doesn't exist
+  mkdir -p /home/ec2-user/"$folder_path"
+  # create docker-compose.yml file
+ printf '
+version: "3.2"
+services:
+ %s:
+   image: "%s"
+   ports:
+     - "%s:%s"
+   environment:
+     - BS_SYNC=BM4
+     - BM_DB_PROXY_SYNC_ID=%s
+     - BM_IP=nginx
+     - BM_PORT=8443
+     - BS_SSL=false
+     - BS_SSL_KEYSTORE_PASSWORD=keystore
+     - BS_SSL_TRUSTSTORE_PASSWORD=keystore
+     - BS_SSL_TLS_VERSION=TLSv1.2
+   networks:
+     - baffle_network-frontend
+   restart: always
+   depends_on:
+     - txn-logger
+ txn-logger:
+   image: "%s"
+   ports:
+     - "%s:%s"
+   networks:
+     - baffle_network-frontend
+networks:
+ baffle_network-frontend:
+   external: true
+ ' "$service_name" "$postgres_shield_image" "$port" "$port" "$access_syncId" "$txn_logger_image" "$txn_logger_port" "$txn_logger_port" > /home/ec2-user/"$folder_path"/docker-compose.yml
+
+  cd /home/ec2-user/"$folder_path"
+
+  echo "Starting Postgres Proxy Service..." >&2
+  # Run docker compose
+  docker-compose up -d &
+
+  # Check if port  is open
+  counter=0
+  while ! netstat -tuln | grep "$port" && [ $counter -lt 10 ]; do
+    echo "Port $port is not open. Retrying in 30 seconds..." >&2
+    sleep 30
+    ((counter++))
+  done
+
+  if netstat -tuln | grep "$port"; then
+    echo "Port $port is open. Postgres Proxy Service is up and running." >&2
+    echo "success"
+  elif [ $counter -eq 10 ]; then
+    echo "Port $port is not open after 5 minutes. Exiting script." >&2
+    echo "error"
+  fi
+}
+
+start_bm(){
+  # change the current directory
+  cd /opt/baffle
+  # Start the Baffle Manager service
+  docker-compose up -d &
+}
+
+start_pg_admin(){
+  # change the current directory
+  cd /home/ec2-user/pg-admin
+  # Create servers.json file
+  servers_json=$(jq -n \
+                  --arg db_host_name "$db_host_name" \
+                  --argjson shield_static_mask_port "$shield_static_mask_port" \
+                  --arg db_user_name "$db_user_name" \
+                  --arg shield_dynamic_mask_host "$shield_dynamic_mask_host" \
+                  --argjson shield_dynamic_mask_port "$shield_dynamic_mask_port" \
+                  --arg shield_cle_host "$shield_cle_host" \
+                  --argjson shield_cle_port "$shield_cle_port" \
+                  --arg shield_rle_host "$shield_rle_host" \
+                  --argjson shield_rle_port "$shield_rle_port" \
+                  --arg shield_dle_host "$shield_dle_host" \
+                  --argjson shield_dle_port "$shield_dle_port" \
+                  --argjson db_port "$db_port" \
+                  '{
+                    "Servers": {
+                      "1": {
+                        "Name": "direct@baffle",
+                        "Group": "dms-static-mask",
+                        "Host": $db_host_name,
+                        "Port": $shield_static_mask_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": $db_user_name,
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "2": {
+                        "Name": "direct@baffle",
+                        "Group": "dynamic-mask",
+                        "Host": $db_host_name,
+                        "Port": $db_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": $db_user_name,
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "3": {
+                        "Name": "shield@baffle",
+                        "Group": "dynamic-mask",
+                        "Host": $shield_dynamic_mask_host,
+                        "Port": $shield_dynamic_mask_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": $db_user_name,
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "4": {
+                        "Name": "Shield@harry_HR",
+                        "Group": "dynamic-mask",
+                        "Host": $shield_dynamic_mask_host,
+                        "Port": $shield_dynamic_mask_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": "harry",
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "5": {
+                        "Name": "Shield@sally_support",
+                        "Group": "dynamic-mask",
+                        "Host": $shield_dynamic_mask_host,
+                        "Port": $shield_dynamic_mask_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": "sally",
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "6": {
+                        "Name": "Shield@ron_remote",
+                        "Group": "dynamic-mask",
+                        "Host": $shield_dynamic_mask_host,
+                        "Port": $shield_dynamic_mask_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": "ron",
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "7": {
+                        "Name": "Shield@baffle",
+                        "Group": "cle",
+                        "Host": $shield_cle_host,
+                        "Port": $shield_cle_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": "baffle",
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "8": {
+                        "Name": "direct@baffle",
+                        "Group": "cle",
+                        "Host": $db_host_name,
+                        "Port": $db_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": $db_user_name,
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "9": {
+                        "Name": "Shield@baffle",
+                        "Group": "rle",
+                        "Host": $shield_rle_host,
+                        "Port": $shield_rle_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": "baffle",
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "10": {
+                        "Name": "direct@baffle",
+                        "Group": "rle",
+                        "Host": $db_host_name,
+                        "Port": $db_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": $db_user_name,
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "11": {
+                        "Name": "Shield@baffle",
+                        "Group": "dle",
+                        "Host": $shield_dle_host,
+                        "Port": $shield_dle_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": "baffle",
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      },
+                      "12": {
+                        "Name": "direct@baffle",
+                        "Group": "dle",
+                        "Host": $db_host_name,
+                        "Port": $db_port,
+                        "MaintenanceDB": "postgres",
+                        "Username": $db_user_name,
+                        "PassFile": "/pgadmin4/pgpass",
+                        "role": "baffle"
+                      }
+                    }
+                  }')
+
+  echo  "Starting pgAdmin..." >&2
+  # remove .env, servers.json and pgpass  files if they exist
+  rm -f servers.json pgpass .env
+  # create Servers.json file
+  echo "$servers_json" > servers.json
+  # create .env file with username and password
+  printf "USERNAME=%s\nPASSWORD=%s\n" "$username" "$password" > .env
+
+  # create PassFile
+  pgpass_content="
+$db_host_name:$db_port:*:$db_user_name:$db_password
+$shield_dynamic_mask_host:$shield_dynamic_mask_port:*:$db_user_name:$db_password
+$shield_dynamic_mask_host:$shield_dynamic_mask_port:*:harry:harry
+$shield_dynamic_mask_host:$shield_dynamic_mask_port:*:sally:sally
+$shield_dynamic_mask_host:$shield_dynamic_mask_port:*:ron:ron
+$shield_cle_host:$shield_cle_port:*:baffle:$db_password
+$shield_rle_host:$shield_rle_port:*:baffle:$db_password
+$shield_dle_host:$shield_dle_port:*:baffle:$db_password
+"
+echo "$pgpass_content" > pgpass
+
+
+  chmod 644 pgpass
+  # Start pgAdmin
+  docker-compose up -d &
+
+  # sleep for 10 seconds
+  sleep 10
+  # Check if port 8446 is open
+  counter=0
+  while ! netstat -tuln | grep 8446 && [ $counter -lt 10 ]; do
+    echo "Port 8446 is not open. Retrying in 30 seconds..." >&2
+    sleep 30
+    ((counter++))
+  done
+
+ if netstat -tuln | grep 8446; then
+   echo "Port 8446 is open. PgAdmin Service is up and running." >&2
+   echo "success"
+ elif [ $counter -eq 10 ]; then
+   echo "Port 8446 is not open after 5 minutes. Exiting script." >&2
+   echo "error"
+ fi
+
+
+}
+execute_sql_command() {
+  hostname=$1
+  port=$2
+  username=$3
+  database=$4
+  command=$5
+  error_message=$(PGPASSWORD=$db_password psql -v ON_ERROR_STOP=1 -h "$hostname" -p "$port" -U "$username" -d "$database" -c "$command" 2>&1)
+  ssn_status_code=$?
+  if [ $ssn_status_code -ne 0 ]; then
+    echo "Error message: $error_message" >&2
+    echo "error"
+  else
+    echo "success"
+  fi
+}
+postgres_db_tables_creation() {
+  # Database and table creation SQL commands
+  echo "Creating databases and tables..." >&2
+  create_dms_source_db="CREATE DATABASE dms_source_db;"
+  create_dms_target_db="CREATE DATABASE dms_target_db;"
+  create_dynamic_mask_db="CREATE DATABASE dynamic_mask_db;"
+  create_cle_db="CREATE DATABASE cle_db;"
+  create_rle_db="CREATE DATABASE rle_db;"
+  create_dle_t1_db="CREATE DATABASE dle_t1_db";
+  create_dle_t2_db="CREATE DATABASE dle_t2_db";
+
+
+  alter_table_replica_full_identity="ALTER TABLE customers REPLICA IDENTITY FULL;"
+  create_user_harry="CREATE USER harry PASSWORD 'harry';"
+  create_user_sally="CREATE USER sally PASSWORD 'sally';"
+  create_user_ron="CREATE USER ron WITH PASSWORD 'ron';"
+  grant_usage_harry="GRANT USAGE ON SCHEMA public TO harry;"
+  grant_select_harry="GRANT SELECT ON TABLE customers TO harry;"
+  grant_usage_sally="GRANT USAGE ON SCHEMA public TO sally;"
+  grant_select_sally="GRANT SELECT ON TABLE customers TO sally;"
+  grant_usage_ron="GRANT USAGE ON SCHEMA public TO ron;"
+  grant_select_ron="GRANT SELECT ON TABLE customers TO ron;"
+
+  create_shadow_schema_table_command="CREATE TABLE IF NOT EXISTS public.baffle_shadow_schema
+    (
+        attrelid oid NOT NULL,
+        attname name COLLATE pg_catalog.\"C\" NOT NULL,
+        atttypid oid,
+        atttypmod integer,
+        table_schema information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+        table_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+        column_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+        udt_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+        udt_schema information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+        data_type information_schema.character_data COLLATE pg_catalog.\"C\",
+        character_maximum_length information_schema.cardinal_number,
+        character_octet_length information_schema.cardinal_number,
+        numeric_precision information_schema.cardinal_number,
+        numeric_precision_radix information_schema.cardinal_number,
+        numeric_scale information_schema.cardinal_number,
+        datetime_precision information_schema.cardinal_number,
+        interval_type information_schema.character_data COLLATE pg_catalog.\"C\",
+        interval_precision information_schema.cardinal_number,
+        column_default information_schema.character_data COLLATE pg_catalog.\"C\",
+        attnum smallint,
+        attlen smallint,
+        attstorage \"char\",
+        CONSTRAINT shadow_db_key PRIMARY KEY (attname, attrelid)
+    )
+    TABLESPACE pg_default;
+
+    ALTER TABLE IF EXISTS public.baffle_shadow_schema
+        OWNER to baffle;
+
+    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM harry;
+    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM ron;
+    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM sally;
+    GRANT ALL ON TABLE public.baffle_shadow_schema TO baffle;
+    GRANT SELECT ON TABLE public.baffle_shadow_schema TO harry;
+    GRANT SELECT ON TABLE public.baffle_shadow_schema TO ron;
+    GRANT SELECT ON TABLE public.baffle_shadow_schema TO sally;"
+
+  execution_status="success"
+  # Execute the command for the 'postgres' database
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dms_source_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dms_target_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dynamic_mask_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_cle_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_rle_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dle_t1_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dle_t2_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_source_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_target_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_source_db" "$alter_table_replica_full_identity")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_target_db" "$alter_table_replica_full_identity")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_harry")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_sally")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_ron")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_harry")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_harry")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_sally")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_sally")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_ron")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_ron")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_shadow_schema_table_command")
+
+
+
+  # Check if all the commands were executed successfully
+  if [ "$execution_status" == "success" ]; then
+    echo "Database and table creation successful." >&2
+    echo "success"
+  else
+    echo "Database and table creation failed." >&2
+    echo "error"
+  fi
+
+}
+
+
+configure_static_mask_database_proxy(){
+  ################## Configuration for Static Masking DMS Proxy ##################
+  echo -e "\n#### Configuring Static Masking Proxy... ####\n" >&2
+  # Get SSN Data Source payload
+  ssn_ds_dms_payload=$(get_ds_payload "ssn_dms_ds" "$database_id" "dms_target_db" "public" "customers" "ssn")
+  # Enroll SSN data source
+  ssn_ds_dms_id=$(send_post_request "$jwt_token" "$data_source_url" "$ssn_ds_dms_payload" "id")
+  if [ "$ssn_ds_dms_id" == "error" ]; then
+    echo "SSN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "SSN Data Source ID: $ssn_ds_dms_id" >&2
+  fi
+
+  # Get CCN Data Source payload
+  ccn_ds_dms_payload=$(get_ds_payload "ccn_dms_ds" "$database_id" "dms_target_db" "public" "customers" "ccn")
+  # Enroll CCN data source
+  ccn_ds_dms_id=$(send_post_request "$jwt_token" "$data_source_url" "$ccn_ds_dms_payload" "id")
+  if [ "$ccn_ds_dms_id" == "error" ]; then
+    echo "CCN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CCN Data Source ID: $ccn_ds_dms_id" >&2
+  fi
+
+  # Get SSN DPP payload
+  ssn_dpp_payload=$(get_ssn_fpe_dpp_payload "$ssn_ds_dms_id" "$kek_id" "$dek_id" "$fpe_decimal_id" "$support_user_group_id" "$hr_user_group_id")
+  # Enroll SSN DPP
+  ssn_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$ssn_dpp_payload" "id")
+  if [ "$ssn_dpp_id" == "error" ]; then
+    echo "SSN DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "SSN DPP ID: $ssn_dpp_id" >&2
+  fi
+
+  # Get CCN DPP payload
+  ccn_dpp_payload=$(get_ccn_fpe_dpp_payload "$ccn_ds_dms_id" "$kek_id" "$dek_id" "$fpe_cc_id" "$support_user_group_id")
+  # Enroll CCN DPP
+  ccn_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$ccn_dpp_payload" "id")
+  if [ "$ccn_dpp_id" == "error" ]; then
+    echo "CCN DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CCN DPP ID: $ccn_dpp_id" >&2
+  fi
+
+  db_proxy_static_mask_payload=$(get_db_proxy_payload "proxy_static_mask" "$database_id" "$aws_kms_id" "$kek_id")
+  # Enroll DB Proxy
+  read db_proxy_static_mask_id static_mask_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_static_mask_payload" "id" "syncId")
+  if [ "$db_proxy_static_mask_id" == "error" ]; then
+    echo "DB Proxy enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DB Proxy ID: $db_proxy_static_mask_id" >&2
+    echo "Sync ID: $static_mask_syncId" >&2
+  fi
+
+  # Deploy DPP
+  deploy_enc_payload=$(get_deploy_payload "add_encryption_policies" "$ssn_dpp_id" "$ccn_dpp_id")
+  deployment_enc_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_static_mask_id/data-policies/deploy" "$deploy_enc_payload" "id")
+  if [ "$deployment_enc_id" == "error" ]; then
+    echo "Deployment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Deployment ID: $deployment_enc_id" >&2
+  fi
+
+  # Start Static Mask Postgres Proxy
+  status=$(start_postgres_proxy "$static_mask_syncId" "$shield_static_mask_folder" "$shield_static_mask_host" "$shield_static_mask_port" "$shield_static_mask_txn_port")
+  if [ "$status" == "error" ]; then
+    echo "Postgres Static Mask Proxy startup failed. Exiting script."
+    exit 1
+  fi
+}
+
+################## Configuration for Dynamic Masking DMS Proxy ##################
+configure_dynamic_mask_database_proxy(){
+  echo -e "\n#### Configuring Dynamic Masking DMS Proxy... ####\n" >&2
+  # Get Baffle User group payload
+  baffle_user_group_payload=$(get_user_group_payload "admin" "baffle")
+  # Enroll Baffle User Group
+  baffle_user_group_id=$(send_post_request "$jwt_token" "$user_group_url" "$baffle_user_group_payload" "id")
+  if [ "$baffle_user_group_id" == "error" ]; then
+    echo "Baffle User Group enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Baffle User Group ID: $baffle_user_group_id" >&2
+  fi
+
+  # Get HR User Group payload
+  hr_user_group_payload=$(get_user_group_payload "human_resources" "harry")
+  # Enroll HR User Group
+  hr_user_group_id=$(send_post_request "$jwt_token" "$user_group_url" "$hr_user_group_payload" "id")
+  if [ "$hr_user_group_id" == "error" ]; then
+    echo "HR User Group enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "HR User Group ID: $hr_user_group_id" >&2
+  fi
+
+  # Get Support User Group payload
+  support_user_group_payload=$(get_user_group_payload "support" "sally")
+  # Enroll Support User Group
+  support_user_group_id=$(send_post_request "$jwt_token" "$user_group_url" "$support_user_group_payload" "id")
+  if [ "$support_user_group_id" == "error" ]; then
+    echo "Support User Group enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Support User Group ID: $support_user_group_id" >&2
+  fi
+
+  # Get Remote User Group payload
+  remote_user_group_payload=$(get_user_group_payload "remote" "ron")
+  # Enroll Remote User Group
+  remote_user_group_id=$(send_post_request "$jwt_token" "$user_group_url" "$remote_user_group_payload" "id")
+  if [ "$remote_user_group_id" == "error" ]; then
+    echo "Remote User Group enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Remote User Group ID: $remote_user_group_id"  >&2
+  fi
+  # Get SSN Data Source payload
+  ssn_ds_dynamic_payload=$(get_ds_payload "ssn_dynamic_ds" "$database_id" "dynamic_mask_db" "public" "customers" "ssn")
+  # Enroll SSN data source
+  ssn_ds_dynamic_id=$(send_post_request "$jwt_token" "$data_source_url" "$ssn_ds_dynamic_payload" "id")
+  if [ "$ssn_ds_dynamic_id" == "error" ]; then
+    echo "SSN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "SSN Data Source ID: $ssn_ds_dynamic_id" >&2
+  fi
+
+  # Get CCN Data Source payload
+  ccn_ds_dynamic_payload=$(get_ds_payload "ccn_dynamic_ds" "$database_id" "dynamic_mask_db" "public" "customers" "ccn")
+  # Enroll CCN data source
+  ccn_ds_dynamic_id=$(send_post_request "$jwt_token" "$data_source_url" "$ccn_ds_dynamic_payload" "id")
+  if [ "$ccn_ds_dynamic_id" == "error" ]; then
+    echo "CCN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CCN Data Source ID: $ccn_ds_dynamic_id" >&2
+  fi
+
+  # Get SSN ACCESS DPP payload
+  ssn_access_dpp_payload=$(get_ssn_fpe_access_dpp_payload "$ssn_ds_dynamic_id" "$kek_id" "$dek_id" "$fpe_decimal_id" "$baffle_user_group_id" "$support_user_group_id" "$hr_user_group_id")
+  # Enroll SSN ACCESS DPP
+  ssn_access_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$ssn_access_dpp_payload" "id")
+  if [ "$ssn_access_dpp_id" == "error" ]; then
+    echo "SSN_ACCESS DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "SSN_ACCESS DPP ID: $ssn_access_dpp_id" >&2
+  fi
+
+  # Get CCN ACCESS DPP payload
+  ccn_access_dpp_payload=$(get_ccn_fpe_access_dpp_payload "$ccn_ds_dynamic_id" "$kek_id" "$dek_id" "$fpe_cc_id" "$baffle_user_group_id" "$support_user_group_id")
+  # Enroll CCN ACCESS DPP
+  ccn_access_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$ccn_access_dpp_payload" "id")
+  if [ "$ccn_access_dpp_id" == "error" ]; then
+    echo "CCN_ACCESS DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CCN_ACCESS DPP ID: $ccn_access_dpp_id" >&2
+  fi
+
+
+  # Get Dynamic Mask DB Proxy payload
+  db_proxy_access_payload=$(get_db_proxy_payload "proxy_dynamic_mask" "$database_id" "$aws_kms_id" "$kek_id")
+  # Enroll DB Proxy
+  read db_proxy_access_id access_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_access_payload" "id" "syncId")
+  if [ "$db_proxy_access_id" == "error" ]; then
+    echo "DB Proxy enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DB Proxy ID: $db_proxy_access_id" >&2
+    echo "Sync ID: $access_syncId" >&2
+  fi
+
+  # Apply Configure
+  config_payload=$(get_proxy_configuration_payload "rbac_port_change" "RBAC_PORT" "$shield_dynamic_mask_port")
+  # Apply Configuration
+  config_name=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_access_id/configurations" "$config_payload" "name")
+  if [ "$config_name" == "error" ]; then
+    echo "Applying configuration failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Configuration applied : RBAC Enabled and Port change to $shield_dynamic_mask_port" >&2
+  fi
+
+
+  # Get Deployment payload
+  deploy_payload=$(get_deploy_payload "add_encryption_access_policies" "$ssn_access_dpp_id" "$ccn_access_dpp_id")
+  # Deploy DPP
+  deployment_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_access_id/data-policies/deploy" "$deploy_payload" "id")
+  if [ "$deployment_id" == "error" ]; then
+    echo "Deployment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Deployment ID: $deployment_id" >&2
+  fi
+
+  # Start Dynamic Mask Postgres Proxy
+  status=$(start_postgres_proxy "$access_syncId" "$shield_dynamic_mask_folder" "$shield_dynamic_mask_host" "$shield_dynamic_mask_port" "$shield_dynamic_mask_txn_port")
+  if [ "$status" == "error" ]; then
+    echo "Postgres Dynamic MAsk Proxy startup failed. Exiting script."
+    exit 1
+  fi
+}
+
+################## Configuration for Cle Database Proxy ##################
+configure_cle_database_proxy(){
+  echo -e "\n#### Configuring CLE Database Proxy... ####\n" >&2
+  # Get SSN Data Source payload
+  ssn_ds_cle_payload=$(get_ds_payload "ssn_cle_ds" "$database_id" "cle_db" "public" "customers" "ssn")
+  # Enroll SSN data source
+  ssn_ds_cle_id=$(send_post_request "$jwt_token" "$data_source_url" "$ssn_ds_cle_payload" "id")
+  if [ "$ssn_ds_cle_id" == "error" ]; then
+    echo "SSN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "SSN Data Source ID: $ssn_ds_cle_id" >&2
+  fi
+
+  # Get CCN Data Source payload
+  ccn_ds_cle_payload=$(get_ds_payload "ccn_cle_ds" "$database_id" "cle_db" "public" "customers" "ccn")
+  # Enroll CCN data source
+  ccn_ds_cle_id=$(send_post_request "$jwt_token" "$data_source_url" "$ccn_ds_cle_payload" "id")
+  if [ "$ccn_ds_cle_id" == "error" ]; then
+    echo "CCN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CCN Data Source ID: $ccn_ds_cle_id" >&2
+  fi
+  # Get DPP payload
+  cle_dpp_payload=$(get_ssn_ccn_ctr_dpp_payload "cle-ssn-ccn-dpp" "$ssn_ds_cle_id" "$ccn_ds_cle_id" "$kek_id" "$dek_id")
+  # Enroll DPP
+  cle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$cle_dpp_payload" "id")
+  if [ "$cle_dpp_id" == "error" ]; then
+    echo "CLE DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CLE DPP ID: $cle_dpp_id" >&2
+  fi
+
+  # Get DB Proxy payload
+  db_proxy_cle_payload=$(get_db_proxy_payload "proxy_cle" "$database_id" "$aws_kms_id" "$kek_id")
+  # Enroll DB Proxy
+  read db_proxy_cle_id cle_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_cle_payload" "id" "syncId")
+  if [ "$db_proxy_cle_id" == "error" ]; then
+    echo "DB Proxy enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DB Proxy ID: $db_proxy_cle_id" >&2
+    echo "Sync ID: $cle_syncId" >&2
+  fi
+
+  # Get Port Change payload
+  port_change_payload=$(get_proxy_configuration_payload "cle_port_change" "PORT" "$shield_cle_port")
+  # Change the port
+  port_name=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_cle_id/configurations" "$port_change_payload" "name")
+  if [ "$port_name" == "error" ]; then
+    echo "Changing port failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Port changed to 5434" >&2
+  fi
+
+
+  # Get Deployment payload
+  deploy_cle_payload=$(get_deploy_payload "add_encryption_access_policies" "$cle_dpp_id")
+  # Deploy DPP
+  deployment_cle_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_cle_id/data-policies/deploy" "$deploy_cle_payload" "id")
+  if [ "$deployment_cle_id" == "error" ]; then
+    echo "Deployment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Deployment ID: $deployment_cle_id" >&2
+  fi
+
+  # Start CLE Postgres Proxy
+  status=$(start_postgres_proxy "$cle_syncId" "$shield_cle_folder" "$shield_cle_host" "$shield_cle_port" "$shield_cle_txn_port")
+  if [ "$status" == "error" ]; then
+    echo "Postgres CLE Proxy startup failed. Exiting script."
+    exit 1
+  fi
+
+
+  # sleep for 10 seconds
+  echo "Sleeping for 10 seconds..." >&2
+  sleep 10
+
+  # insert 4 rows into customers table into cle_db database using cle proxy
+  insert_command="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('1', 'John', '1234-5678-1234-5678', '123-45-6789', 'T-1001');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('2', 'Jane', '2345-6789-0123-4567', '234-56-7891', 'T-1001');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('3', 'Bob', '3456-7890-1234-5678', '345-67-8912', 'T-2002');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('4', 'Alice', '4567-8901-2345-6789', '456-78-9123', 'T-2002');"
+  execution_status=$(execute_sql_command "localhost" "$shield_cle_port" "$db_user_name" "cle_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_cle_port" "$db_user_name" "cle_db" "$insert_command")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Inserting rows into customers table in CLE database failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Rows inserted into customers table in CLE database." >&2
+  fi
+}
+################## Configuration for RLE Database Proxy ##################
+configure_rle_database_proxy(){
+  echo -e "\n#### Configuring RLE Database Proxy... ####\n" >&2
+
+  # Enroll Tenant-1
+  rle_tenant1_payload=$(get_tenant_payload "Rle-Tenant-1" "T-1001" "$aws_kms_id" "$kek1_id" "T-rle-1001-dek")
+  rle_tenant1_id=$(send_post_request "$jwt_token" "$tenant_url" "$rle_tenant1_payload" "id")
+  if [ "$rle_tenant1_id" == "error" ]; then
+    echo "RLE Tenant-1 enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "RLE Tenant-1 ID: $rle_tenant1_id" >&2
+  fi
+
+  # Enroll Tenant-2
+  rle_tenant2_payload=$(get_tenant_payload "Rle-Tenant-2" "T-2002" "$aws_kms_id" "$kek2_id" "T-rle-2002-dek")
+  rle_tenant2_id=$(send_post_request "$jwt_token" "$tenant_url" "$rle_tenant2_payload" "id")
+  if [ "$rle_tenant2_id" == "error" ]; then
+    echo "Tenant-2 enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Tenant-2 ID: $rle_tenant2_id" >&2
+  fi
+
+  # Get SSN Data Source payload
+  ssn_ds_rle_payload=$(get_ds_payload "ssn_rle_ds" "$database_id" "rle_db" "public" "customers" "ssn")
+  # Enroll SSN data source
+  ssn_ds_rle_id=$(send_post_request "$jwt_token" "$data_source_url" "$ssn_ds_rle_payload" "id")
+  if [ "$ssn_ds_rle_id" == "error" ]; then
+    echo "SSN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "SSN Data Source ID: $ssn_ds_rle_id" >&2
+  fi
+
+  # Get CCN Data Source payload
+  ccn_ds_rle_payload=$(get_ds_payload "ccn_rle_ds" "$database_id" "rle_db" "public" "customers" "ccn")
+  # Enroll CCN data source
+  ccn_ds_rle_id=$(send_post_request "$jwt_token" "$data_source_url" "$ccn_ds_rle_payload" "id")
+  if [ "$ccn_ds_rle_id" == "error" ]; then
+    echo "CCN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CCN Data Source ID: $ccn_ds_rle_id" >&2
+  fi
+
+  # Get DPP payload
+  rle_dpp_payload=$(get_ssn_ccn_rle_dpp_payload "rle-ssn-ccn-dpp" "$ssn_ds_rle_id" "$ccn_ds_rle_id" "rle_db" "$rle_tenant1_id" "$rle_tenant2_id")
+  # Enroll DPP
+  rle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$rle_dpp_payload" "id")
+  if [ "$rle_dpp_id" == "error" ]; then
+    echo "RLE DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "RLE DPP ID: $rle_dpp_id" >&2
+  fi
+
+  # Get DB Proxy payload
+  db_proxy_rle_payload=$(get_db_proxy_payload "proxy_rle" "$database_id" "$aws_kms_id" "$kek_id")
+  # Enroll DB Proxy
+  read db_proxy_rle_id rle_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_rle_payload" "id" "syncId")
+  if [ "$db_proxy_rle_id" == "error" ]; then
+    echo "DB Proxy enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DB Proxy ID: $db_proxy_rle_id" >&2
+    echo "Sync ID: $rle_syncId" >&2
+  fi
+
+  # Apply Configure
+  config_payload=$(get_proxy_configuration_payload "rle_port_change" "RLE_PORT" "$shield_rle_port")
+  # Apply Configuration
+  config_name=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_rle_id/configurations" "$config_payload" "name")
+  if [ "$config_name" == "error" ]; then
+    echo "Applying configuration failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Configuration applied : RLE Enabled and Port change to $shield_rle_port" >&2
+  fi
+
+
+
+  # Get Deployment payload
+  deploy_rle_payload=$(get_deploy_payload "add_encryption_access_policies" "$rle_dpp_id")
+  # Deploy DPP
+  deployment_rle_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_rle_id/data-policies/deploy" "$deploy_rle_payload" "id")
+  if [ "$deployment_rle_id" == "error" ]; then
+    echo "Deployment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Deployment ID: $deployment_rle_id" >&2
+  fi
+
+  # Start RLE Postgres Proxy
+  status=$(start_postgres_proxy "$rle_syncId" "$shield_rle_folder" "$shield_rle_host" "$shield_rle_port" "$shield_rle_txn_port")
+  if [ "$status" == "error" ]; then
+    echo "Postgres RLE Proxy startup failed. Exiting script."
+    exit 1
+  fi
+
+  # Sleep for 10 seconds
+  echo "Sleeping for 10 seconds..." >&2
+  sleep 10
+  # insert 4 rows into customers table into rle_db database using cle proxy
+  insert_command="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('1', 'John', '1234-5678-1234-5678', '123-45-6789', 'T-1001');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('2', 'Jane', '2345-6789-0123-4567', '234-56-7891', 'T-1001');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('3', 'Bob', '3456-7890-1234-5678', '345-67-8912', 'T-2002');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('4', 'Alice', '4567-8901-2345-6789', '456-78-9123', 'T-2002');"
+  execution_status=$(execute_sql_command "localhost" "$shield_rle_port" "$db_user_name" "rle_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_rle_port" "$db_user_name" "rle_db" "$insert_command")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Inserting rows into customers table in RLE database failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Rows inserted into customers table in RLE database." >&2
+  fi
+}
+################## Configuration DLE Proxy ##################
+configure_dle_database_proxy(){
+  echo -e "\n#### Configuring DLE Database Proxy... ####\n" >&2
+
+  # Enroll Tenant-1
+  dle_tenant1_payload=$(get_tenant_payload "dle_t1_db" "dle_t1_db" "$aws_kms_id" "$kek1_id" "T-dle-1-dek")
+  dle_tenant1_id=$(send_post_request "$jwt_token" "$tenant_url" "$dle_tenant1_payload" "id")
+  if [ "$dle_tenant1_id" == "error" ]; then
+    echo "DLE Tenant-1 enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DLE Tenant-1 ID: $dle_tenant1_id" >&2
+  fi
+
+  # Enroll Tenant-2
+  dle_tenant2_payload=$(get_tenant_payload "dle_t2_db" "dle_t2_db" "$aws_kms_id" "$kek2_id" "T-dle-2-dek")
+  dle_tenant2_id=$(send_post_request "$jwt_token" "$tenant_url" "$dle_tenant2_payload" "id")
+  if [ "$dle_tenant2_id" == "error" ]; then
+    echo "DLE Tenant-2 enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DLE Tenant-2 ID: $dle_tenant2_id" >&2
+  fi
+
+  # Get SSN CCN Data Source payload for tenant-1
+  ds_dle_t1_payload=$(get_ds_payload "ssn_ccn_dle_t1_ds" "$database_id" "dle_t1_db" "public" "customers" "ssn" "ccn")
+  # Enroll SSN data source
+  ds_dle_t1_id=$(send_post_request "$jwt_token" "$data_source_url" "$ds_dle_t1_payload" "id")
+  if [ "$ds_dle_t1_id" == "error" ]; then
+    echo "SSN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "SSN Data Source ID: $ds_dle_t1_id" >&2
+  fi
+
+  # Get SSN CCN Data Source payload for tenant-2
+  ds_dle_t2_payload=$(get_ds_payload "ssn_ccn_dle_t2_ds" "$database_id" "dle_t2_db" "public" "customers" "ssn" "ccn")
+  # Enroll CCN data source
+  ds_dle_t2_id=$(send_post_request "$jwt_token" "$data_source_url" "$ds_dle_t2_payload" "id")
+  if [ "$ds_dle_t2_id" == "error" ]; then
+    echo "CCN Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CCN Data Source ID: $ds_dle_t2_id" >&2
+  fi
+
+  # Get DPP payload
+  dle_dpp_payload=$(get_ssn_ccn_dle_dpp_payload "dle-ssn-ccn-dpp" "$ds_dle_t1_id" "$ds_dle_t2_id" "$dle_tenant1_id" "$dle_tenant2_id")
+  echo "DLE DPP payload: $dle_dpp_payload" >&2
+  # Enroll DPP
+  dle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$dle_dpp_payload" "id")
+  if [ "$dle_dpp_id" == "error" ]; then
+    echo "DLE DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DLE DPP ID: $dle_dpp_id" >&2
+  fi
+
+  # Get DB Proxy payload
+  db_proxy_dle_payload=$(get_db_proxy_payload "proxy_dle" "$database_id" "$aws_kms_id" "$kek_id")
+  # Enroll DB Proxy
+  read db_proxy_dle_id dle_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_dle_payload" "id" "syncId")
+  if [ "$db_proxy_dle_id" == "error" ]; then
+    echo "DB Proxy enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DB Proxy ID: $db_proxy_dle_id" >&2
+    echo "Sync ID: $dle_syncId" >&2
+  fi
+
+  # Apply Configure
+  config_payload=$(get_proxy_configuration_payload "dle_port_change" "DLE_PORT" "$shield_dle_port")
+  # Apply Configuration
+  config_name=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_dle_id/configurations" "$config_payload" "name")
+  if [ "$config_name" == "error" ]; then
+    echo "Applying configuration failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Configuration applied : DLE Enabled and Port change to $shield_dle_port" >&2
+  fi
+
+  # Get Deployment payload
+  deploy_dle_payload=$(get_deploy_payload "add_encryption_access_policies" "$dle_dpp_id")
+  # Deploy DPP
+  deployment_dle_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_dle_id/data-policies/deploy" "$deploy_dle_payload" "id")
+  if [ "$deployment_dle_id" == "error" ]; then
+    echo "Deployment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Deployment ID: $deployment_dle_id" >&2
+  fi
+
+  # Start DLE Postgres Proxy
+  status=$(start_postgres_proxy "$dle_syncId" "$shield_dle_folder" "$shield_dle_host" "$shield_dle_port" "$shield_dle_txn_port")
+  if [ "$status" == "error" ]; then
+    echo "Postgres DLE Proxy startup failed. Exiting script."
+    exit 1
+  fi
+
+  # Sleep for 10 seconds
+  echo "Sleeping for 10 seconds..." >&2
+  sleep 10
+
+  dle_customers_table_create_command="CREATE TABLE customers (
+        uuid VARCHAR(40),
+        first_name VARCHAR(50),
+        ccn VARCHAR(50),
+        ssn VARCHAR(50)
+    );"
+  # insert 4 rows into customers table into dle_t1_db database using dle proxy
+  insert_command="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('1', 'John', '1234-5678-1234-5678', '123-45-6789');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('2', 'Jane', '2345-6789-0123-4567', '234-56-7891');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('3', 'Bob', '3456-7890-1234-5678', '345-67-8912');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('4', 'Alice', '4567-8901-2345-6789', '456-78-9123');"
+  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "dle_t1_db" "$dle_customers_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "dle_t1_db" "$insert_command")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Inserting rows into customers table in DLE dle_t1_db database failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Rows inserted into customers table in DLE dle_t1_db database." >&2
+  fi
+
+  # insert 4 rows into customers table into dle_t2_db database using dle proxy
+  insert_command="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('1', 'John', '1234-5678-1234-5678', '123-45-6789');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('2', 'Jane', '2345-6789-0123-4567', '234-56-7891');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('3', 'Bob', '3456-7890-1234-5678', '345-67-8912');"
+  insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('4', 'Alice', '4567-8901-2345-6789', '456-78-9123');"
+  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "dle_t2_db" "$dle_customers_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "dle_t2_db" "$insert_command")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Inserting rows into customers table in DLE dle_t2_db database failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Rows inserted into customers table in DLE dle_t2_db database." >&2
+  fi
+
+
+
+}
+
+################## Main Workflow ##################
+configure_bm(){
+  ################## Configuration to Create Database and Tables ##################
+  status=$(postgres_db_tables_creation)
+  if [ "$status" == "error" ]; then
+    echo "Database and table creation failed. Exiting script."
+    exit 1
+  fi
+
+  ################## Configuration for Baffle Manager ##################
+  start_bm
+  # Check if the BM REST API service is up and running
+  status=$(check_application)
+  if [ "$status" == "error" ]; then
+    echo "BM REST API service is not responding. Exiting script." >&2
+    exit 1
+  fi
+
+  # Get Registration payload
+  registration_payload=$(get_registration_payload)
+  # Register the system admin
+  status=$(send_post_request "null" "$registration_url" "$registration_payload")
+  if [ "$status" == "error" ]; then
+    echo "System admin registration failed. Exiting script."  >&2
+    exit 1
+  else
+    echo "System admin registration successful." >&2
+  fi
+
+
+  # Get Login payload
+  login_payload=$(get_login_payload)
+  # Login as the system admin
+  jwt_token=$(send_post_request "null" "$login_url" "$login_payload" "accessToken")
+  if [ "$jwt_token" == "error" ]; then
+    echo "Login failed. Exiting script." >&2
+    exit 1
+  else
+    echo "JWT Token: $jwt_token" >&2
+    echo "Login successful." >&2
+  fi
+
+  # Get AWS KMS payload
+  aws_kms_payload=$(get_aws_kms_payload)
+  # Enroll AWS KMS
+  aws_kms_id=$(send_post_request "$jwt_token" "$aws_kms_url" "$aws_kms_payload" "id")
+  if [ "$aws_kms_id" == "error" ]; then
+    echo "AWS KMS enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "AWS KMS ID: $aws_kms_id" >&2
+  fi
+
+  # Get KEK payload
+  kek_payload=$(get_kek_payload "$kek_name" "$aws_kms_id" )
+  # Enroll KEK
+  kek_id=$(send_post_request "$jwt_token" "$kek_url" "$kek_payload" "id")
+  if [ "$kek_id" == "error" ]; then
+    echo "KEK enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "KEK ID: $kek_id" >&2
+  fi
+
+  # Get DEK payload
+  dek_payload=$(get_dek_payload "$kek_id")
+  # Enroll DEK
+  dek_id=$(send_post_request "$jwt_token" "$kek_url/$kek_id/deks" "$dek_payload" "id")
+  if [ "$dek_id" == "error" ]; then
+    echo "DEK enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DEK ID: $dek_id" >&2
+  fi
+  # write  if condition for workflows ALL, RLE, DLE
+  if [ "$execute_workflow" == "ALL" ] || [ "$execute_workflow" == "RLE" ] || [ "$execute_workflow" == "DLE" ]; then
+    # Enroll KEK-1
+      kek1_payload=$(get_kek_payload "$kek_name_1" "$aws_kms_id" )
+      kek1_id=$(send_post_request "$jwt_token" "$kek_url" "$kek1_payload" "id")
+      if [ "$kek1_id" == "error" ]; then
+        echo "KEK-1 enrollment failed. Exiting script." >&2
+        exit 1
+      else
+        echo "KEK-1 ID: $kek1_id" >&2
+      fi
+      # Enroll KEK-2
+      kek2_payload=$(get_kek_payload "$kek_name_2" "$aws_kms_id" )
+      kek2_id=$(send_post_request "$jwt_token" "$kek_url" "$kek2_payload" "id")
+      if [ "$kek2_id" == "error" ]; then
+        echo "KEK-2 enrollment failed. Exiting script." >&2
+        exit 1
+      else
+        echo "KEK-2 ID: $kek2_id" >&2
+      fi
+  fi
+
+
+  # Get Database payload
+  database_payload=$(get_database_payload)
+  # Enroll Database
+  database_id=$(send_post_request "$jwt_token" "$database_url" "$database_payload" "id")
+  if [ "$database_id" == "error" ]; then
+    echo "Database enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Database ID: $database_id" >&2
+  fi
+
+  # Get FPE Decimal Policy
+  fpe_decimal_id=$(send_get_request "$jwt_token" "$fpe_decimal_url")
+  if [ "$fpe_decimal_id" == "error" ]; then
+    echo "FPE Decimal retrieval failed. Exiting script." >&2
+    exit 1
+  else
+    echo "FPE Decimal ID: $fpe_decimal_id" >&2
+  fi
+  # Get FPE CC Policy
+  fpe_cc_id=$(send_get_request "$jwt_token" "$fpe_cc_url")
+  if [ "$fpe_cc_id" == "error" ]; then
+    echo "FPE CC retrieval failed. Exiting script." >&2
+    exit 1
+  else
+    echo "FPE CC ID: $fpe_cc_id" >&2
+  fi
+}
+# Execute workflow based on execute_workflow variable. ALL, STATIC_MASK, DYNAMIC_MASK, CLE, RLE
+configure_bm
+if [ "$execute_workflow" == "ALL" ]; then
+  configure_static_mask_database_proxy
+  configure_dynamic_mask_database_proxy
+  configure_cle_database_proxy
+  configure_rle_database_proxy
+  configure_dle_database_proxy
+elif [ "$execute_workflow" == "STATIC_MASK" ]; then
+  configure_static_mask_database_proxy
+elif [ "$execute_workflow" == "DYNAMIC_MASK" ]; then
+  configure_dynamic_mask_database_proxy
+elif [ "$execute_workflow" == "CLE" ]; then
+  configure_cle_database_proxy
+elif [ "$execute_workflow" == "RLE" ]; then
+  configure_rle_database_proxy
+elif [ "$execute_workflow" == "DLE" ]; then
+  configure_dle_database_proxy
+else
+  echo "Invalid workflow. Exiting script." >&2
+  exit 1
+fi
+
+################## Configuration for PgAdmin ##################
+# Start the pgAdmin service
+status=$(start_pg_admin)
+if [ "$status" == "error" ]; then
+  echo "PgAdmin startup failed. Exiting script."
+  exit 1
+fi
