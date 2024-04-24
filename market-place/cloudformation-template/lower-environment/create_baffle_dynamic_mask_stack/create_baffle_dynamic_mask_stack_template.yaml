@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Ask user for IP, and user credential"
+Description: "Ask user for IP, user credential and Workflow"
 
 Parameters:
   MyIP:
@@ -212,6 +212,7 @@ Resources:
       Parameters:
         rds.force_ssl: 0
         rds.logical_replication: 1
+        shared_preload_libraries:  "pg_stat_statements, plrust"
 
   BaffleDB:
     Type: "AWS::RDS::DBInstance"

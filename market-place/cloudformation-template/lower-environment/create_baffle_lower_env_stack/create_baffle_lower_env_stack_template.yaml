@@ -200,6 +200,7 @@ Resources:
       Parameters:
         rds.force_ssl: 0
         rds.logical_replication: 1
+        shared_preload_libraries:  "pg_stat_statements, plrust"
 
   BaffleDB:
     Type: "AWS::RDS::DBInstance"
