@@ -61,6 +61,16 @@ shield_dle_host="shield_dle"
 shield_dle_port=5436
 shield_dle_txn_port=9504
 
+#Database Names
+dms_source_db="dms_source_db"
+dms_target_db="dms_target_db"
+dynamic_mask_db="dynamic_mask_db"
+cle_db="cle_db"
+rle_db="rle_db"
+dle_t1_db="dle_t1_db"
+dle_t2_db="dle_t2_db"
+rqe_db="rqe_db"
+
 # Database Table Creation SQL Commands
 customers_table_create_command="CREATE TABLE customers (
       uuid VARCHAR(40),
@@ -1251,12 +1261,28 @@ execute_sql_command() {
     echo "success"
   fi
 }
+
+execute_sql_file() {
+  hostname=$1
+  port=$2
+  username=$3
+  database=$4
+  sql_file=$5
+  error_message=$(PGPASSWORD=$db_password psql -v ON_ERROR_STOP=1 -h "$hostname" -p "$port" -U "$username" -d "$database" -f "$sql_file" 2>&1)
+  ssn_status_code=$?
+  if [ $ssn_status_code -ne 0 ]; then
+    echo "Error message: $error_message" >&2
+    echo "error"
+  else
+    echo "success"
+  fi
+}
 postgres_db_tables_creation() {
   # Database and table creation SQL commands
   echo "Creating databases and tables..." >&2
-  create_dms_source_db="CREATE DATABASE dms_source_db;"
-  create_dms_target_db="CREATE DATABASE dms_target_db;"
-  create_dynamic_mask_db="CREATE DATABASE dynamic_mask_db;"
+#  create_dms_source_db="CREATE DATABASE dms_source_db;"
+#  create_dms_target_db="CREATE DATABASE dms_target_db;"
+#  create_dynamic_mask_db="CREATE DATABASE dynamic_mask_db;"
   create_cle_db="CREATE DATABASE cle_db;"
   create_rle_db="CREATE DATABASE rle_db;"
   create_dle_t1_db="CREATE DATABASE dle_t1_db";
@@ -1355,8 +1381,24 @@ postgres_db_tables_creation() {
 configure_static_mask_database_proxy(){
   ################## Configuration for Static Masking DMS Proxy ##################
   echo -e "\n#### Configuring Static Masking Proxy... ####\n" >&2
+  # Create database and tables
+  echo "Creating databases and tables..." >&2
+  create_dms_source_db="CREATE DATABASE $dms_source_db;"
+  create_dms_target_db="CREATE DATABASE $dms_target_db;"
+  alter_table_replica_full_identity="ALTER TABLE customers REPLICA IDENTITY FULL;"
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dms_source_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dms_target_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$dms_source_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$dms_target_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$dms_source_db" "$alter_table_replica_full_identity")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$dms_target_db" "$alter_table_replica_full_identity")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Database and table creation failed. Exiting script." >&2
+    exit 1
+  fi
   # Get SSN Data Source payload
-  ssn_ds_dms_payload=$(get_ds_payload "ssn_dms_ds" "$database_id" "dms_target_db" "public" "customers" "ssn")
+  ssn_ds_dms_payload=$(get_ds_payload "ssn_dms_ds" "$database_id" "$dms_target_db" "public" "customers" "ssn")
   # Enroll SSN data source
   ssn_ds_dms_id=$(send_post_request "$jwt_token" "$data_source_url" "$ssn_ds_dms_payload" "id")
   if [ "$ssn_ds_dms_id" == "error" ]; then
@@ -1367,7 +1409,7 @@ configure_static_mask_database_proxy(){
   fi
 
   # Get CCN Data Source payload
-  ccn_ds_dms_payload=$(get_ds_payload "ccn_dms_ds" "$database_id" "dms_target_db" "public" "customers" "ccn")
+  ccn_ds_dms_payload=$(get_ds_payload "ccn_dms_ds" "$database_id" "$dms_target_db" "public" "customers" "ccn")
   # Enroll CCN data source
   ccn_ds_dms_id=$(send_post_request "$jwt_token" "$data_source_url" "$ccn_ds_dms_payload" "id")
   if [ "$ccn_ds_dms_id" == "error" ]; then
@@ -1431,6 +1473,71 @@ configure_static_mask_database_proxy(){
 ################## Configuration for Dynamic Masking DMS Proxy ##################
 configure_dynamic_mask_database_proxy(){
   echo -e "\n#### Configuring Dynamic Masking DMS Proxy... ####\n" >&2
+    # Create database and tables
+    echo "Creating databases and tables..." >&2
+    create_dynamic_mask_db="CREATE DATABASE $dynamic_mask_db;"
+    create_users_with_permissions_command="
+      CREATE USER harry PASSWORD 'harry';
+      CREATE USER sally PASSWORD 'sally';
+      CREATE USER ron WITH PASSWORD 'ron';
+      GRANT USAGE ON SCHEMA public TO harry;
+      GRANT SELECT ON TABLE customers TO harry;
+      GRANT USAGE ON SCHEMA public TO sally;
+      GRANT SELECT ON TABLE customers TO sally;
+      GRANT USAGE ON SCHEMA public TO ron;
+      GRANT SELECT ON TABLE customers TO ron;
+
+      CREATE TABLE IF NOT EXISTS public.baffle_shadow_schema
+        (
+            attrelid oid NOT NULL,
+            attname name COLLATE pg_catalog.\"C\" NOT NULL,
+            atttypid oid,
+            atttypmod integer,
+            table_schema information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+            table_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+            column_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+            udt_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+            udt_schema information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+            data_type information_schema.character_data COLLATE pg_catalog.\"C\",
+            character_maximum_length information_schema.cardinal_number,
+            character_octet_length information_schema.cardinal_number,
+            numeric_precision information_schema.cardinal_number,
+            numeric_precision_radix information_schema.cardinal_number,
+            numeric_scale information_schema.cardinal_number,
+            datetime_precision information_schema.cardinal_number,
+            interval_type information_schema.character_data COLLATE pg_catalog.\"C\",
+            interval_precision information_schema.cardinal_number,
+            column_default information_schema.character_data COLLATE pg_catalog.\"C\",
+            attnum smallint,
+            attlen smallint,
+            attstorage \"char\",
+            CONSTRAINT shadow_db_key PRIMARY KEY (attname, attrelid)
+        )
+        TABLESPACE pg_default;
+
+        ALTER TABLE IF EXISTS public.baffle_shadow_schema
+            OWNER to baffle;
+
+        REVOKE ALL ON TABLE public.baffle_shadow_schema FROM harry;
+        REVOKE ALL ON TABLE public.baffle_shadow_schema FROM ron;
+        REVOKE ALL ON TABLE public.baffle_shadow_schema FROM sally;
+        GRANT ALL ON TABLE public.baffle_shadow_schema TO baffle;
+        GRANT SELECT ON TABLE public.baffle_shadow_schema TO harry;
+        GRANT SELECT ON TABLE public.baffle_shadow_schema TO ron;
+        GRANT SELECT ON TABLE public.baffle_shadow_schema TO sally;"
+
+
+
+    execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dynamic_mask_db")
+    execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$dynamic_mask_db" "$customers_table_create_command")
+    execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$dynamic_mask_db" "$create_users_with_permissions_command")
+
+    if [ "$execution_status" == "error" ]; then
+      echo "Database and table creation failed. Exiting script." >&2
+      exit 1
+    fi
+
+
   # Get Baffle User group payload
   baffle_user_group_payload=$(get_user_group_payload "admin" "baffle")
   # Enroll Baffle User Group
@@ -1475,7 +1582,7 @@ configure_dynamic_mask_database_proxy(){
     echo "Remote User Group ID: $remote_user_group_id"  >&2
   fi
   # Get SSN Data Source payload
-  ssn_ds_dynamic_payload=$(get_ds_payload "ssn_dynamic_ds" "$database_id" "dynamic_mask_db" "public" "customers" "ssn")
+  ssn_ds_dynamic_payload=$(get_ds_payload "ssn_dynamic_ds" "$database_id" "$dynamic_mask_db" "public" "customers" "ssn")
   # Enroll SSN data source
   ssn_ds_dynamic_id=$(send_post_request "$jwt_token" "$data_source_url" "$ssn_ds_dynamic_payload" "id")
   if [ "$ssn_ds_dynamic_id" == "error" ]; then
@@ -1486,7 +1593,7 @@ configure_dynamic_mask_database_proxy(){
   fi
 
   # Get CCN Data Source payload
-  ccn_ds_dynamic_payload=$(get_ds_payload "ccn_dynamic_ds" "$database_id" "dynamic_mask_db" "public" "customers" "ccn")
+  ccn_ds_dynamic_payload=$(get_ds_payload "ccn_dynamic_ds" "$database_id" "$dynamic_mask_db" "public" "customers" "ccn")
   # Enroll CCN data source
   ccn_ds_dynamic_id=$(send_post_request "$jwt_token" "$data_source_url" "$ccn_ds_dynamic_payload" "id")
   if [ "$ccn_ds_dynamic_id" == "error" ]; then
@@ -1565,8 +1672,18 @@ configure_dynamic_mask_database_proxy(){
 ################## Configuration for Cle Database Proxy ##################
 configure_cle_database_proxy(){
   echo -e "\n#### Configuring CLE Database Proxy... ####\n" >&2
+  # Create database and tables
+  echo "Creating Cle database..." >&2
+  create_cle_db="CREATE DATABASE $cle_db;"
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_cle_db")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Database and table creation failed. Exiting script." >&2
+    exit 1
+  fi
+
   # Get SSN Data Source payload
-  ssn_ds_cle_payload=$(get_ds_payload "ssn_cle_ds" "$database_id" "cle_db" "public" "customers" "ssn")
+  ssn_ds_cle_payload=$(get_ds_payload "ssn_cle_ds" "$database_id" "$cle_db" "public" "customers" "ssn")
   # Enroll SSN data source
   ssn_ds_cle_id=$(send_post_request "$jwt_token" "$data_source_url" "$ssn_ds_cle_payload" "id")
   if [ "$ssn_ds_cle_id" == "error" ]; then
@@ -1577,7 +1694,7 @@ configure_cle_database_proxy(){
   fi
 
   # Get CCN Data Source payload
-  ccn_ds_cle_payload=$(get_ds_payload "ccn_cle_ds" "$database_id" "cle_db" "public" "customers" "ccn")
+  ccn_ds_cle_payload=$(get_ds_payload "ccn_cle_ds" "$database_id" "$cle_db" "public" "customers" "ccn")
   # Enroll CCN data source
   ccn_ds_cle_id=$(send_post_request "$jwt_token" "$data_source_url" "$ccn_ds_cle_payload" "id")
   if [ "$ccn_ds_cle_id" == "error" ]; then
@@ -1645,12 +1762,13 @@ configure_cle_database_proxy(){
   sleep 10
 
   # insert 4 rows into customers table into cle_db database using cle proxy
+  echo "Inserting rows into customers table in CLE database..." >&2
   insert_command="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('1', 'John', '1234-5678-1234-5678', '123-45-6789', 'T-1001');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('2', 'Jane', '2345-6789-0123-4567', '234-56-7891', 'T-1001');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('3', 'Bob', '3456-7890-1234-5678', '345-67-8912', 'T-2002');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('4', 'Alice', '4567-8901-2345-6789', '456-78-9123', 'T-2002');"
-  execution_status=$(execute_sql_command "localhost" "$shield_cle_port" "$db_user_name" "cle_db" "$customers_table_create_command")
-  execution_status=$(execute_sql_command "localhost" "$shield_cle_port" "$db_user_name" "cle_db" "$insert_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_cle_port" "$db_user_name" "$cle_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_cle_port" "$db_user_name" "$cle_db" "$insert_command")
 
   if [ "$execution_status" == "error" ]; then
     echo "Inserting rows into customers table in CLE database failed. Exiting script." >&2
@@ -1662,6 +1780,16 @@ configure_cle_database_proxy(){
 ################## Configuration for RLE Database Proxy ##################
 configure_rle_database_proxy(){
   echo -e "\n#### Configuring RLE Database Proxy... ####\n" >&2
+  # Create database and tables
+  echo "Creating RLE database..." >&2
+  create_rle_db="CREATE DATABASE $rle_db;"
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_rle_db")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Database and table creation failed. Exiting script." >&2
+    exit 1
+  fi
+
 
   # Enroll Tenant-1
   rle_tenant1_payload=$(get_tenant_payload "Rle-Tenant-1" "T-1001" "$aws_kms_id" "$kek1_id" "T-rle-1001-dek")
@@ -1684,7 +1812,7 @@ configure_rle_database_proxy(){
   fi
 
   # Get SSN Data Source payload
-  ssn_ds_rle_payload=$(get_ds_payload "ssn_rle_ds" "$database_id" "rle_db" "public" "customers" "ssn")
+  ssn_ds_rle_payload=$(get_ds_payload "ssn_rle_ds" "$database_id" "$rle_db" "public" "customers" "ssn")
   # Enroll SSN data source
   ssn_ds_rle_id=$(send_post_request "$jwt_token" "$data_source_url" "$ssn_ds_rle_payload" "id")
   if [ "$ssn_ds_rle_id" == "error" ]; then
@@ -1695,7 +1823,7 @@ configure_rle_database_proxy(){
   fi
 
   # Get CCN Data Source payload
-  ccn_ds_rle_payload=$(get_ds_payload "ccn_rle_ds" "$database_id" "rle_db" "public" "customers" "ccn")
+  ccn_ds_rle_payload=$(get_ds_payload "ccn_rle_ds" "$database_id" "$rle_db" "public" "customers" "ccn")
   # Enroll CCN data source
   ccn_ds_rle_id=$(send_post_request "$jwt_token" "$data_source_url" "$ccn_ds_rle_payload" "id")
   if [ "$ccn_ds_rle_id" == "error" ]; then
@@ -1706,7 +1834,7 @@ configure_rle_database_proxy(){
   fi
 
   # Get DPP payload
-  rle_dpp_payload=$(get_ssn_ccn_rle_dpp_payload "rle-ssn-ccn-dpp" "$ssn_ds_rle_id" "$ccn_ds_rle_id" "rle_db" "$rle_tenant1_id" "$rle_tenant2_id")
+  rle_dpp_payload=$(get_ssn_ccn_rle_dpp_payload "rle-ssn-ccn-dpp" "$ssn_ds_rle_id" "$ccn_ds_rle_id" "$rle_db" "$rle_tenant1_id" "$rle_tenant2_id")
   # Enroll DPP
   rle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$rle_dpp_payload" "id")
   if [ "$rle_dpp_id" == "error" ]; then
@@ -1763,12 +1891,13 @@ configure_rle_database_proxy(){
   echo "Sleeping for 10 seconds..." >&2
   sleep 10
   # insert 4 rows into customers table into rle_db database using cle proxy
+  echo "Inserting rows into customers table in RLE database..." >&2
   insert_command="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('1', 'John', '1234-5678-1234-5678', '123-45-6789', 'T-1001');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('2', 'Jane', '2345-6789-0123-4567', '234-56-7891', 'T-1001');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('3', 'Bob', '3456-7890-1234-5678', '345-67-8912', 'T-2002');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn, entity_id) VALUES ('4', 'Alice', '4567-8901-2345-6789', '456-78-9123', 'T-2002');"
-  execution_status=$(execute_sql_command "localhost" "$shield_rle_port" "$db_user_name" "rle_db" "$customers_table_create_command")
-  execution_status=$(execute_sql_command "localhost" "$shield_rle_port" "$db_user_name" "rle_db" "$insert_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_rle_port" "$db_user_name" "$rle_db" "$customers_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_rle_port" "$db_user_name" "$rle_db" "$insert_command")
 
   if [ "$execution_status" == "error" ]; then
     echo "Inserting rows into customers table in RLE database failed. Exiting script." >&2
@@ -1780,9 +1909,20 @@ configure_rle_database_proxy(){
 ################## Configuration DLE Proxy ##################
 configure_dle_database_proxy(){
   echo -e "\n#### Configuring DLE Database Proxy... ####\n" >&2
+  # Create database and tables
+  echo "Creating DLE Tenant-1 database..." >&2
+  create_dle_t1_db="CREATE DATABASE $dle_t1_db;"
+  create_dle_t2_db="CREATE DATABASE $dle_t2_db;"
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dle_t1_db")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dle_t2_db")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Database and table creation failed. Exiting script." >&2
+    exit 1
+  fi
 
   # Enroll Tenant-1
-  dle_tenant1_payload=$(get_tenant_payload "dle_t1_db" "dle_t1_db" "$aws_kms_id" "$kek1_id" "T-dle-1-dek")
+  dle_tenant1_payload=$(get_tenant_payload "dle_tenant_1" "$dle_t1_db" "$aws_kms_id" "$kek1_id" "T1-dle-dek")
   dle_tenant1_id=$(send_post_request "$jwt_token" "$tenant_url" "$dle_tenant1_payload" "id")
   if [ "$dle_tenant1_id" == "error" ]; then
     echo "DLE Tenant-1 enrollment failed. Exiting script." >&2
@@ -1792,7 +1932,7 @@ configure_dle_database_proxy(){
   fi
 
   # Enroll Tenant-2
-  dle_tenant2_payload=$(get_tenant_payload "dle_t2_db" "dle_t2_db" "$aws_kms_id" "$kek2_id" "T-dle-2-dek")
+  dle_tenant2_payload=$(get_tenant_payload "dle_tenant_2" "$dle_t2_db" "$aws_kms_id" "$kek2_id" "T2-dle-dek")
   dle_tenant2_id=$(send_post_request "$jwt_token" "$tenant_url" "$dle_tenant2_payload" "id")
   if [ "$dle_tenant2_id" == "error" ]; then
     echo "DLE Tenant-2 enrollment failed. Exiting script." >&2
@@ -1802,7 +1942,7 @@ configure_dle_database_proxy(){
   fi
 
   # Get SSN CCN Data Source payload for tenant-1
-  ds_dle_t1_payload=$(get_ds_payload "ssn_ccn_dle_t1_ds" "$database_id" "dle_t1_db" "public" "customers" "ssn" "ccn")
+  ds_dle_t1_payload=$(get_ds_payload "ssn_ccn_dle_t1_ds" "$database_id" "$dle_t1_db" "public" "customers" "ssn" "ccn")
   # Enroll SSN data source
   ds_dle_t1_id=$(send_post_request "$jwt_token" "$data_source_url" "$ds_dle_t1_payload" "id")
   if [ "$ds_dle_t1_id" == "error" ]; then
@@ -1813,7 +1953,7 @@ configure_dle_database_proxy(){
   fi
 
   # Get SSN CCN Data Source payload for tenant-2
-  ds_dle_t2_payload=$(get_ds_payload "ssn_ccn_dle_t2_ds" "$database_id" "dle_t2_db" "public" "customers" "ssn" "ccn")
+  ds_dle_t2_payload=$(get_ds_payload "ssn_ccn_dle_t2_ds" "$database_id" "$dle_t2_db" "public" "customers" "ssn" "ccn")
   # Enroll CCN data source
   ds_dle_t2_id=$(send_post_request "$jwt_token" "$data_source_url" "$ds_dle_t2_payload" "id")
   if [ "$ds_dle_t2_id" == "error" ]; then
@@ -1891,14 +2031,14 @@ configure_dle_database_proxy(){
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('2', 'Jane', '2345-6789-0123-4567', '234-56-7891');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('3', 'Bob', '3456-7890-1234-5678', '345-67-8912');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('4', 'Alice', '4567-8901-2345-6789', '456-78-9123');"
-  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "dle_t1_db" "$dle_customers_table_create_command")
-  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "dle_t1_db" "$insert_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "$dle_t1_db" "$dle_customers_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "$dle_t1_db" "$insert_command")
 
   if [ "$execution_status" == "error" ]; then
-    echo "Inserting rows into customers table in DLE dle_t1_db database failed. Exiting script." >&2
+    echo "Inserting rows into customers table in DLE $dle_t1_db database failed. Exiting script." >&2
     exit 1
   else
-    echo "Rows inserted into customers table in DLE dle_t1_db database." >&2
+    echo "Rows inserted into customers table in DLE $dle_t1_db database." >&2
   fi
 
   # insert 4 rows into customers table into dle_t2_db database using dle proxy
@@ -1906,20 +2046,31 @@ configure_dle_database_proxy(){
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('2', 'Jane', '2345-6789-0123-4567', '234-56-7891');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('3', 'Bob', '3456-7890-1234-5678', '345-67-8912');"
   insert_command+="INSERT INTO customers (uuid, first_name, ccn, ssn ) VALUES ('4', 'Alice', '4567-8901-2345-6789', '456-78-9123');"
-  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "dle_t2_db" "$dle_customers_table_create_command")
-  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "dle_t2_db" "$insert_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "$dle_t2_db" "$dle_customers_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_dle_port" "$db_user_name" "$dle_t2_db" "$insert_command")
 
   if [ "$execution_status" == "error" ]; then
-    echo "Inserting rows into customers table in DLE dle_t2_db database failed. Exiting script." >&2
+    echo "Inserting rows into customers table in DLE $dle_t2_db database failed. Exiting script." >&2
     exit 1
   else
-    echo "Rows inserted into customers table in DLE dle_t2_db database." >&2
+    echo "Rows inserted into customers table in DLE $dle_t2_db database." >&2
   fi
 
-
-
 }
-
+################## Configuration for RQE Database Proxy ##################
+configure_rqe_database_proxy(){
+  echo -e "\n#### Configuring RQE Database Proxy... ####\n" >&2
+  # Create database and tables
+  echo "Creating RQE database..." >&2
+  create_rqe_db="CREATE DATABASE $rqe_db;"
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_rqe_db")
+  echo "Creating UDFs..."
+  execution_status=$(execute_sql_file "$db_host_name" "$db_port" "$db_user_name" "$rqe_db" "/home/ec2-user/AE-2/ae2_udfs_plrust.sql")
+  if [ "$execution_status" == "error" ]; then
+    echo "Database and table creation failed. Exiting script." >&2
+    exit 1
+  fi
+}
 ################## Main Workflow ##################
 configure_bm(){
   ################## Configuration to Create Database and Tables ##################
