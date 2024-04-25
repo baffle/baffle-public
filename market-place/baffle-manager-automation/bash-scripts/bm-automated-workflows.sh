@@ -60,6 +60,11 @@ shield_dle_folder="Baffle-Shield-Postgresql-DLE"
 shield_dle_host="shield_dle"
 shield_dle_port=5436
 shield_dle_txn_port=9504
+shield_rqe_folder="Baffle-Shield-Postgresql-RQE"
+shield_rqe_host="shield_rqe"
+shield_rqe_port=5437
+shield_rqe_txn_port=9505
+
 
 #Database Names
 dms_source_db="dms_source_db"
@@ -775,6 +780,41 @@ get_ssn_ccn_dle_dpp_payload(){
   echo "$payload"
 }
 
+# Get RQE DPP payload with Ctr cmode
+get_rqe_ctr_dpp_payload(){
+
+  payload=$(jq -n \
+          --arg name "$1" \
+          --arg rqe_ds_id "$2" \
+          --arg kek_id "$3" \
+          --arg dek_id "$4" \
+          '{
+            "name": $name,
+            "dataSources": [
+              {
+                "id": $rqe_ds_id
+              }
+            ],
+            "encryption": {
+              "encryptionType": "TRADITIONAL",
+              "encryptionKeyMode": "GLOBAL",
+              "traditionalEncryption": {
+                "encryptionFormat": "AES_CTR_DET",
+                "globalKey": {
+                  "kek": {
+                    "id": $kek_id
+                  },
+                  "dek": {
+                    "id": $dek_id
+                  }
+                }
+              }
+            }
+          }')
+
+  echo "$payload"
+}
+
 # Get Tenant payload
 get_tenant_payload(){
   name=$1
@@ -876,12 +916,25 @@ get_proxy_configuration_payload(){
                              "baffleshield.clientPort": $port
                            }
                         }')
+  elif [ "$type" == "RQE_PORT" ]; then
+    proxy_configuration_payload=$(jq -n \
+                             --arg name "$name" \
+                             --argjson port "$port" \
+                            '{
+                              "name": $name,
+                              "debugLevel": "NONE",
+                              "advancedEncryption": "tier-2",
+                              "advancedConfig": {
+                                 "baffleshield.clientPort": $port
+                               }
+                            }')
   elif [ "$type" == "PORT" ]; then
     proxy_configuration_payload=$(jq -n \
                          --arg name "$name" \
                          --argjson port "$port" \
                         '{
                           "name": $name,
+                          "debugLevel": "TRANSFORMED_SQL",
                           "advancedConfig": {
                             "baffleshield.clientPort": $port
                           }
@@ -1061,144 +1114,361 @@ start_bm(){
 start_pg_admin(){
   # change the current directory
   cd /home/ec2-user/pg-admin
-  # Create servers.json file
-  servers_json=$(jq -n \
-                  --arg db_host_name "$db_host_name" \
-                  --argjson shield_static_mask_port "$shield_static_mask_port" \
-                  --arg db_user_name "$db_user_name" \
-                  --arg shield_dynamic_mask_host "$shield_dynamic_mask_host" \
-                  --argjson shield_dynamic_mask_port "$shield_dynamic_mask_port" \
-                  --arg shield_cle_host "$shield_cle_host" \
-                  --argjson shield_cle_port "$shield_cle_port" \
-                  --arg shield_rle_host "$shield_rle_host" \
-                  --argjson shield_rle_port "$shield_rle_port" \
-                  --arg shield_dle_host "$shield_dle_host" \
-                  --argjson shield_dle_port "$shield_dle_port" \
-                  --argjson db_port "$db_port" \
-                  '{
-                    "Servers": {
-                      "1": {
-                        "Name": "direct@baffle",
-                        "Group": "dms-static-mask",
-                        "Host": $db_host_name,
-                        "Port": $shield_static_mask_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": $db_user_name,
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "2": {
-                        "Name": "direct@baffle",
-                        "Group": "dynamic-mask",
-                        "Host": $db_host_name,
-                        "Port": $db_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": $db_user_name,
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "3": {
-                        "Name": "shield@baffle",
-                        "Group": "dynamic-mask",
-                        "Host": $shield_dynamic_mask_host,
-                        "Port": $shield_dynamic_mask_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": $db_user_name,
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "4": {
-                        "Name": "Shield@harry_HR",
-                        "Group": "dynamic-mask",
-                        "Host": $shield_dynamic_mask_host,
-                        "Port": $shield_dynamic_mask_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": "harry",
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "5": {
-                        "Name": "Shield@sally_support",
-                        "Group": "dynamic-mask",
-                        "Host": $shield_dynamic_mask_host,
-                        "Port": $shield_dynamic_mask_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": "sally",
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "6": {
-                        "Name": "Shield@ron_remote",
-                        "Group": "dynamic-mask",
-                        "Host": $shield_dynamic_mask_host,
-                        "Port": $shield_dynamic_mask_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": "ron",
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "7": {
-                        "Name": "Shield@baffle",
-                        "Group": "cle",
-                        "Host": $shield_cle_host,
-                        "Port": $shield_cle_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": "baffle",
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "8": {
-                        "Name": "direct@baffle",
-                        "Group": "cle",
-                        "Host": $db_host_name,
-                        "Port": $db_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": $db_user_name,
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "9": {
-                        "Name": "Shield@baffle",
-                        "Group": "rle",
-                        "Host": $shield_rle_host,
-                        "Port": $shield_rle_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": "baffle",
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "10": {
-                        "Name": "direct@baffle",
-                        "Group": "rle",
-                        "Host": $db_host_name,
-                        "Port": $db_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": $db_user_name,
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "11": {
-                        "Name": "Shield@baffle",
-                        "Group": "dle",
-                        "Host": $shield_dle_host,
-                        "Port": $shield_dle_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": "baffle",
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      },
-                      "12": {
-                        "Name": "direct@baffle",
-                        "Group": "dle",
-                        "Host": $db_host_name,
-                        "Port": $db_port,
-                        "MaintenanceDB": "postgres",
-                        "Username": $db_user_name,
-                        "PassFile": "/pgadmin4/pgpass",
-                        "role": "baffle"
-                      }
-                    }
-                  }')
+  # create server.json based on $execute_workflow
+
+   if [ "$execute_workflow" == "STATIC_MASK" ]; then
+     servers_json=$(jq -n \
+                                    --arg db_host_name "$db_host_name" \
+                                    --argjson shield_static_mask_port "$shield_static_mask_port" \
+                                    '{
+                                        "Servers": {
+                                          "1": {
+                                            "Name": "direct@baffle",
+                                            "Group": "dms-static-mask",
+                                            "Host": $db_host_name,
+                                            "Port": $shield_static_mask_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": "baffle"
+                                          }
+                                        }
+                                    }')
+    elif [ "$execute_workflow" == "DYNAMIC_MASK" ]; then
+      servers_json=$(jq -n \
+                                    --arg db_host_name "$db_host_name" \
+                                    --argjson db_port "$db_port" \
+                                    --arg db_user_name "$db_user_name" \
+                                    --arg shield_dynamic_mask_host "$shield_dynamic_mask_host" \
+                                    --argjson shield_dynamic_mask_port "$shield_dynamic_mask_port" \
+                                    '{
+                                        "Servers": {
+                                          "1": {
+                                            "Name": "direct@baffle",
+                                            "Group": "dynamic-mask",
+                                            "Host": $db_host_name,
+                                            "Port": $db_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "2": {
+                                            "Name": "shield@baffle",
+                                            "Group": "dynamic-mask",
+                                            "Host": $shield_dynamic_mask_host,
+                                            "Port": $shield_dynamic_mask_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "3": {
+                                            "Name": "shield@baffle",
+                                            "Group": "dynamic-mask",
+                                            "Host": $shield_dynamic_mask_host,
+                                            "Port": $shield_dynamic_mask_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "4": {
+                                            "Name": "Shield@harry_HR",
+                                            "Group": "dynamic-mask",
+                                            "Host": $shield_dynamic_mask_host,
+                                            "Port": $shield_dynamic_mask_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": "harry",
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "5": {
+                                            "Name": "Shield@sally_support",
+                                            "Group": "dynamic-mask",
+                                            "Host": $shield_dynamic_mask_host,
+                                            "Port": $shield_dynamic_mask_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": "sally",
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "6": {
+                                            "Name": "Shield@ron_remote",
+                                            "Group": "dynamic-mask",
+                                            "Host": $shield_dynamic_mask_host,
+                                            "Port": $shield_dynamic_mask_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": "ron",
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          }
+                                        }
+                                    }')
+    elif [ "$execute_workflow" == "CLE" ]; then
+      servers_json=$(jq -n \
+                                    --arg db_host_name "$db_host_name" \
+                                    --argjson db_port "$db_port" \
+                                    --arg db_user_name "$db_user_name" \
+                                    --arg shield_cle_host "$shield_cle_host" \
+                                    --argjson shield_cle_port "$shield_cle_port" \
+                                    '{
+                                        "Servers": {
+                                          "1": {
+                                            "Name": "shield@baffle",
+                                            "Group": "cle",
+                                            "Host": $shield_cle_host,
+                                            "Port": $shield_cle_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": "baffle",
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "2": {
+                                            "Name": "direct@baffle",
+                                            "Group": "cle",
+                                            "Host": $db_host_name,
+                                            "Port": $db_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          }
+                                        }
+                                    }')
+    elif [ "$execute_workflow" == "RLE" ]; then
+      servers_json=$(jq -n \
+                                    --arg db_host_name "$db_host_name" \
+                                    --argjson db_port "$db_port" \
+                                    --arg db_user_name "$db_user_name" \
+                                    --arg shield_rle_host "$shield_rle_host" \
+                                    --argjson shield_rle_port "$shield_rle_port" \
+                                    '{
+                                        "Servers": {
+                                          "1": {
+                                            "Name": "shield@baffle",
+                                            "Group": "rle",
+                                            "Host": $shield_rle_host,
+                                            "Port": $shield_rle_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": "baffle",
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "2": {
+                                            "Name": "direct@baffle",
+                                            "Group": "rle",
+                                            "Host": $db_host_name,
+                                            "Port": $db_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          }
+                                        }
+                                    }')
+    elif [ "$execute_workflow" == "DLE" ]; then
+      servers_json=$(jq -n \
+                                    --arg db_host_name "$db_host_name" \
+                                    --argjson db_port "$db_port" \
+                                    --arg db_user_name "$db_user_name" \
+                                    --arg shield_dle_host "$shield_dle_host" \
+                                    --argjson shield_dle_port "$shield_dle_port" \
+                                    '{
+                                        "Servers": {
+                                          "1": {
+                                            "Name": "shield@baffle",
+                                            "Group": "dle",
+                                            "Host": $shield_dle_host,
+                                            "Port": $shield_dle_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": "baffle",
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "2": {
+                                            "Name": "direct@baffle",
+                                            "Group": "dle",
+                                            "Host": $db_host_name,
+                                            "Port": $db_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          }
+                                        }
+                                    }')
+    elif [ "$execute_workflow" == "RQE" ]; then
+      servers_json=$(jq -n \
+                                    --arg db_host_name "$db_host_name" \
+                                    --argjson db_port "$db_port" \
+                                    --arg db_user_name "$db_user_name" \
+                                    --arg shield_rqe_host "$shield_rqe_host" \
+                                    --argjson shield_rqe_port "$shield_rqe_port" \
+                                    '{
+                                        "Servers": {
+                                          "1": {
+                                            "Name": "shield@baffle",
+                                            "Group": "rqe",
+                                            "Host": $shield_rqe_host,
+                                            "Port": $shield_rqe_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          },
+                                          "2": {
+                                            "Name": "direct@baffle",
+                                            "Group": "rqe",
+                                            "Host": $db_host_name,
+                                            "Port": $db_port,
+                                            "MaintenanceDB": "postgres",
+                                            "Username": $db_user_name,
+                                            "PassFile": "/pgadmin4/pgpass",
+                                            "role": $db_user_name
+                                          }
+                                        }
+                                    }')
+    fi
+
+
+#  servers_json=$(jq -n \
+#                  --arg db_host_name "$db_host_name" \
+#                  --argjson shield_static_mask_port "$shield_static_mask_port" \
+#                  --arg db_user_name "$db_user_name" \
+#                  --arg shield_dynamic_mask_host "$shield_dynamic_mask_host" \
+#                  --argjson shield_dynamic_mask_port "$shield_dynamic_mask_port" \
+#                  --arg shield_cle_host "$shield_cle_host" \
+#                  --argjson shield_cle_port "$shield_cle_port" \
+#                  --arg shield_rle_host "$shield_rle_host" \
+#                  --argjson shield_rle_port "$shield_rle_port" \
+#                  --arg shield_dle_host "$shield_dle_host" \
+#                  --argjson shield_dle_port "$shield_dle_port" \
+#                  --argjson db_port "$db_port" \
+#                  '{
+#                    "Servers": {
+#                      "1": {
+#                        "Name": "direct@baffle",
+#                        "Group": "dms-static-mask",
+#                        "Host": $db_host_name,
+#                        "Port": $shield_static_mask_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": $db_user_name,
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "2": {
+#                        "Name": "direct@baffle",
+#                        "Group": "dynamic-mask",
+#                        "Host": $db_host_name,
+#                        "Port": $db_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": $db_user_name,
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "3": {
+#                        "Name": "shield@baffle",
+#                        "Group": "dynamic-mask",
+#                        "Host": $shield_dynamic_mask_host,
+#                        "Port": $shield_dynamic_mask_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": $db_user_name,
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "4": {
+#                        "Name": "Shield@harry_HR",
+#                        "Group": "dynamic-mask",
+#                        "Host": $shield_dynamic_mask_host,
+#                        "Port": $shield_dynamic_mask_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": "harry",
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "5": {
+#                        "Name": "Shield@sally_support",
+#                        "Group": "dynamic-mask",
+#                        "Host": $shield_dynamic_mask_host,
+#                        "Port": $shield_dynamic_mask_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": "sally",
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "6": {
+#                        "Name": "Shield@ron_remote",
+#                        "Group": "dynamic-mask",
+#                        "Host": $shield_dynamic_mask_host,
+#                        "Port": $shield_dynamic_mask_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": "ron",
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "7": {
+#                        "Name": "Shield@baffle",
+#                        "Group": "cle",
+#                        "Host": $shield_cle_host,
+#                        "Port": $shield_cle_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": "baffle",
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "8": {
+#                        "Name": "direct@baffle",
+#                        "Group": "cle",
+#                        "Host": $db_host_name,
+#                        "Port": $db_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": $db_user_name,
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "9": {
+#                        "Name": "Shield@baffle",
+#                        "Group": "rle",
+#                        "Host": $shield_rle_host,
+#                        "Port": $shield_rle_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": "baffle",
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "10": {
+#                        "Name": "direct@baffle",
+#                        "Group": "rle",
+#                        "Host": $db_host_name,
+#                        "Port": $db_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": $db_user_name,
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "11": {
+#                        "Name": "Shield@baffle",
+#                        "Group": "dle",
+#                        "Host": $shield_dle_host,
+#                        "Port": $shield_dle_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": "baffle",
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      },
+#                      "12": {
+#                        "Name": "direct@baffle",
+#                        "Group": "dle",
+#                        "Host": $db_host_name,
+#                        "Port": $db_port,
+#                        "MaintenanceDB": "postgres",
+#                        "Username": $db_user_name,
+#                        "PassFile": "/pgadmin4/pgpass",
+#                        "role": "baffle"
+#                      }
+#                    }
+#                  }')
 
   echo  "Starting pgAdmin..." >&2
   # remove .env, servers.json and pgpass  files if they exist
@@ -1277,105 +1547,105 @@ execute_sql_file() {
     echo "success"
   fi
 }
-postgres_db_tables_creation() {
-  # Database and table creation SQL commands
-  echo "Creating databases and tables..." >&2
-#  create_dms_source_db="CREATE DATABASE dms_source_db;"
-#  create_dms_target_db="CREATE DATABASE dms_target_db;"
-#  create_dynamic_mask_db="CREATE DATABASE dynamic_mask_db;"
-  create_cle_db="CREATE DATABASE cle_db;"
-  create_rle_db="CREATE DATABASE rle_db;"
-  create_dle_t1_db="CREATE DATABASE dle_t1_db";
-  create_dle_t2_db="CREATE DATABASE dle_t2_db";
-
-
-  alter_table_replica_full_identity="ALTER TABLE customers REPLICA IDENTITY FULL;"
-  create_user_harry="CREATE USER harry PASSWORD 'harry';"
-  create_user_sally="CREATE USER sally PASSWORD 'sally';"
-  create_user_ron="CREATE USER ron WITH PASSWORD 'ron';"
-  grant_usage_harry="GRANT USAGE ON SCHEMA public TO harry;"
-  grant_select_harry="GRANT SELECT ON TABLE customers TO harry;"
-  grant_usage_sally="GRANT USAGE ON SCHEMA public TO sally;"
-  grant_select_sally="GRANT SELECT ON TABLE customers TO sally;"
-  grant_usage_ron="GRANT USAGE ON SCHEMA public TO ron;"
-  grant_select_ron="GRANT SELECT ON TABLE customers TO ron;"
-
-  create_shadow_schema_table_command="CREATE TABLE IF NOT EXISTS public.baffle_shadow_schema
-    (
-        attrelid oid NOT NULL,
-        attname name COLLATE pg_catalog.\"C\" NOT NULL,
-        atttypid oid,
-        atttypmod integer,
-        table_schema information_schema.sql_identifier COLLATE pg_catalog.\"C\",
-        table_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
-        column_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
-        udt_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
-        udt_schema information_schema.sql_identifier COLLATE pg_catalog.\"C\",
-        data_type information_schema.character_data COLLATE pg_catalog.\"C\",
-        character_maximum_length information_schema.cardinal_number,
-        character_octet_length information_schema.cardinal_number,
-        numeric_precision information_schema.cardinal_number,
-        numeric_precision_radix information_schema.cardinal_number,
-        numeric_scale information_schema.cardinal_number,
-        datetime_precision information_schema.cardinal_number,
-        interval_type information_schema.character_data COLLATE pg_catalog.\"C\",
-        interval_precision information_schema.cardinal_number,
-        column_default information_schema.character_data COLLATE pg_catalog.\"C\",
-        attnum smallint,
-        attlen smallint,
-        attstorage \"char\",
-        CONSTRAINT shadow_db_key PRIMARY KEY (attname, attrelid)
-    )
-    TABLESPACE pg_default;
-
-    ALTER TABLE IF EXISTS public.baffle_shadow_schema
-        OWNER to baffle;
-
-    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM harry;
-    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM ron;
-    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM sally;
-    GRANT ALL ON TABLE public.baffle_shadow_schema TO baffle;
-    GRANT SELECT ON TABLE public.baffle_shadow_schema TO harry;
-    GRANT SELECT ON TABLE public.baffle_shadow_schema TO ron;
-    GRANT SELECT ON TABLE public.baffle_shadow_schema TO sally;"
-
-  execution_status="success"
-  # Execute the command for the 'postgres' database
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dms_source_db")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dms_target_db")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dynamic_mask_db")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_cle_db")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_rle_db")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dle_t1_db")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dle_t2_db")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_source_db" "$customers_table_create_command")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_target_db" "$customers_table_create_command")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_source_db" "$alter_table_replica_full_identity")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_target_db" "$alter_table_replica_full_identity")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$customers_table_create_command")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_harry")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_sally")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_ron")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_harry")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_harry")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_sally")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_sally")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_ron")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_ron")
-  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_shadow_schema_table_command")
-
-
-
-  # Check if all the commands were executed successfully
-  if [ "$execution_status" == "success" ]; then
-    echo "Database and table creation successful." >&2
-    echo "success"
-  else
-    echo "Database and table creation failed." >&2
-    echo "error"
-  fi
-
-}
+#postgres_db_tables_creation() {
+#  # Database and table creation SQL commands
+#  echo "Creating databases and tables..." >&2
+##  create_dms_source_db="CREATE DATABASE dms_source_db;"
+##  create_dms_target_db="CREATE DATABASE dms_target_db;"
+##  create_dynamic_mask_db="CREATE DATABASE dynamic_mask_db;"
+#  create_cle_db="CREATE DATABASE cle_db;"
+#  create_rle_db="CREATE DATABASE rle_db;"
+#  create_dle_t1_db="CREATE DATABASE dle_t1_db";
+#  create_dle_t2_db="CREATE DATABASE dle_t2_db";
+#
+#
+#  alter_table_replica_full_identity="ALTER TABLE customers REPLICA IDENTITY FULL;"
+#  create_user_harry="CREATE USER harry PASSWORD 'harry';"
+#  create_user_sally="CREATE USER sally PASSWORD 'sally';"
+#  create_user_ron="CREATE USER ron WITH PASSWORD 'ron';"
+#  grant_usage_harry="GRANT USAGE ON SCHEMA public TO harry;"
+#  grant_select_harry="GRANT SELECT ON TABLE customers TO harry;"
+#  grant_usage_sally="GRANT USAGE ON SCHEMA public TO sally;"
+#  grant_select_sally="GRANT SELECT ON TABLE customers TO sally;"
+#  grant_usage_ron="GRANT USAGE ON SCHEMA public TO ron;"
+#  grant_select_ron="GRANT SELECT ON TABLE customers TO ron;"
+#
+#  create_shadow_schema_table_command="CREATE TABLE IF NOT EXISTS public.baffle_shadow_schema
+#    (
+#        attrelid oid NOT NULL,
+#        attname name COLLATE pg_catalog.\"C\" NOT NULL,
+#        atttypid oid,
+#        atttypmod integer,
+#        table_schema information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+#        table_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+#        column_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+#        udt_name information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+#        udt_schema information_schema.sql_identifier COLLATE pg_catalog.\"C\",
+#        data_type information_schema.character_data COLLATE pg_catalog.\"C\",
+#        character_maximum_length information_schema.cardinal_number,
+#        character_octet_length information_schema.cardinal_number,
+#        numeric_precision information_schema.cardinal_number,
+#        numeric_precision_radix information_schema.cardinal_number,
+#        numeric_scale information_schema.cardinal_number,
+#        datetime_precision information_schema.cardinal_number,
+#        interval_type information_schema.character_data COLLATE pg_catalog.\"C\",
+#        interval_precision information_schema.cardinal_number,
+#        column_default information_schema.character_data COLLATE pg_catalog.\"C\",
+#        attnum smallint,
+#        attlen smallint,
+#        attstorage \"char\",
+#        CONSTRAINT shadow_db_key PRIMARY KEY (attname, attrelid)
+#    )
+#    TABLESPACE pg_default;
+#
+#    ALTER TABLE IF EXISTS public.baffle_shadow_schema
+#        OWNER to baffle;
+#
+#    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM harry;
+#    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM ron;
+#    REVOKE ALL ON TABLE public.baffle_shadow_schema FROM sally;
+#    GRANT ALL ON TABLE public.baffle_shadow_schema TO baffle;
+#    GRANT SELECT ON TABLE public.baffle_shadow_schema TO harry;
+#    GRANT SELECT ON TABLE public.baffle_shadow_schema TO ron;
+#    GRANT SELECT ON TABLE public.baffle_shadow_schema TO sally;"
+#
+#  execution_status="success"
+#  # Execute the command for the 'postgres' database
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dms_source_db")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dms_target_db")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dynamic_mask_db")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_cle_db")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_rle_db")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dle_t1_db")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_dle_t2_db")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_source_db" "$customers_table_create_command")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_target_db" "$customers_table_create_command")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_source_db" "$alter_table_replica_full_identity")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dms_target_db" "$alter_table_replica_full_identity")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$customers_table_create_command")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_harry")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_sally")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_user_ron")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_harry")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_harry")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_sally")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_sally")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_usage_ron")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$grant_select_ron")
+#  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "dynamic_mask_db" "$create_shadow_schema_table_command")
+#
+#
+#
+#  # Check if all the commands were executed successfully
+#  if [ "$execution_status" == "success" ]; then
+#    echo "Database and table creation successful." >&2
+#    echo "success"
+#  else
+#    echo "Database and table creation failed." >&2
+#    echo "error"
+#  fi
+#
+#}
 
 
 configure_static_mask_database_proxy(){
@@ -2065,22 +2335,110 @@ configure_rqe_database_proxy(){
   create_rqe_db="CREATE DATABASE $rqe_db;"
   execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "$create_rqe_db")
   echo "Creating UDFs..."
-  execution_status=$(execute_sql_file "$db_host_name" "$db_port" "$db_user_name" "$rqe_db" "/home/ec2-user/AE-2/ae2_udfs_plrust.sql")
-  if [ "$execution_status" == "error" ]; then
-    echo "Database and table creation failed. Exiting script." >&2
+#  execution_status=$(execute_sql_file "$db_host_name" "$db_port" "$db_user_name" "$rqe_db" "/home/ec2-user/AE-2/ae2_udfs_plrust.sql")
+#  if [ "$execution_status" == "error" ]; then
+#    echo "Database and table creation failed. Exiting script." >&2
+#    exit 1
+#  fi
+  # Get Data Source payload
+  ds_rqe_payload=$(get_ds_payload "rqe_ds" "$database_id" "$rqe_db" "public" "employees" "ssn" "age" "salary")
+
+  # Enroll data source
+  ds_rqe_id=$(send_post_request "$jwt_token" "$data_source_url" "$ds_rqe_payload" "id")
+  if [ "$ds_rqe_id" == "error" ]; then
+    echo "Data Source enrollment failed. Exiting script." >&2
     exit 1
+  else
+    echo "Data Source ID: $ds_rqe_id" >&2
   fi
-}
-################## Main Workflow ##################
-configure_bm(){
-  ################## Configuration to Create Database and Tables ##################
-  status=$(postgres_db_tables_creation)
+
+  # Get DPP payload
+  rqe_dpp_payload=$(get_rqe_ctr_dpp_payload "rqe-dpp" "$ds_rqe_id" "$kek_id" "$dek_id" )
+  # Enroll DPP
+  rqe_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$rqe_dpp_payload" "id")
+  if [ "$rqe_dpp_id" == "error" ]; then
+    echo "RQE DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "RQE DPP ID: $rqe_dpp_id" >&2
+  fi
+
+  # Get DB Proxy payload
+  db_proxy_rqe_payload=$(get_db_proxy_payload "proxy_rqe" "$database_id" "$aws_kms_id" "$kek_id")
+  # Enroll DB Proxy
+  read db_proxy_rqe_id rqe_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_rqe_payload" "id" "syncId")
+  if [ "$db_proxy_rqe_id" == "error" ]; then
+    echo "DB Proxy enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DB Proxy ID: $db_proxy_rqe_id" >&2
+    echo "Sync ID: $rqe_syncId" >&2
+  fi
+
+  # Apply Configure
+  config_payload=$(get_proxy_configuration_payload "rqe_port_change" "RQE_PORT" "$shield_rqe_port")
+  # Apply Configuration
+  config_name=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_rqe_id/configurations" "$config_payload" "name")
+  if [ "$config_name" == "error" ]; then
+    echo "Applying configuration failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Configuration applied : RQE Enabled and Port change to $shield_rqe_port" >&2
+  fi
+
+  # Get Deployment payload
+  deploy_rqe_payload=$(get_deploy_payload "add_encryption_access_policies" "$rqe_dpp_id")
+  # Deploy DPP
+  deployment_rqe_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_rqe_id/data-policies/deploy" "$deploy_rqe_payload" "id")
+  if [ "$deployment_rqe_id" == "error" ]; then
+    echo "Deployment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Deployment ID: $deployment_rqe_id" >&2
+  fi
+
+  # Start RQE Postgres Proxy
+  status=$(start_postgres_proxy "$rqe_syncId" "$shield_rqe_folder" "$shield_rqe_host" "$shield_rqe_port" "$shield_rqe_txn_port")
   if [ "$status" == "error" ]; then
-    echo "Database and table creation failed. Exiting script."
+    echo "Postgres RQE Proxy startup failed. Exiting script."
     exit 1
   fi
 
+  # Sleep for 10 seconds
+  echo "Sleeping for 10 seconds..." >&2
+  sleep 10
+
+  # create employees table
+  echo "Creating employees table in RQE database..." >&2
+  employees_table_create_command="CREATE TABLE employees (
+        uuid VARCHAR(40),
+        first_name VARCHAR(50),
+        last_name VARCHAR(50),
+        ssn VARCHAR(50),
+        age INT,
+        salary INT
+    );"
+  # insert 4 rows into customers table into rqe_db database using rqe proxy
+  echo "Inserting rows into employees table in RQE database..." >&2
+  insert_command="INSERT INTO employees (uuid, first_name, last_name, ssn, age, salary ) VALUES ('1', 'John', 'Doe', '123-45-6789', 30, 100000);"
+  insert_command+="INSERT INTO employees (uuid, first_name, last_name, ssn, age, salary ) VALUES ('2', 'Jane', 'Doe', '234-56-7891', 35, 120000);"
+  insert_command+="INSERT INTO employees (uuid, first_name, last_name, ssn, age, salary ) VALUES ('3', 'Bob', 'Smith', '345-67-8912', 40, 140000);"
+  insert_command+="INSERT INTO employees (uuid, first_name, last_name, ssn, age, salary ) VALUES ('4', 'Alice', 'Smith', '456-78-9123', 45, 160000);"
+  execution_status=$(execute_sql_command "localhost" "$shield_rqe_port" "$db_user_name" "$rqe_db" "$employees_table_create_command")
+  execution_status=$(execute_sql_command "localhost" "$shield_rqe_port" "$db_user_name" "$rqe_db" "$insert_command")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Inserting rows into employees table in RQE database failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Rows inserted into employees table in RQE database." >&2
+  fi
+
+}
+################## Main Workflow ##################
+configure_bm(){
   ################## Configuration for Baffle Manager ##################
+  echo -e "\n#### Configuring Baffle Manager... ####\n" >&2
   start_bm
   # Check if the BM REST API service is up and running
   status=$(check_application)
@@ -2198,9 +2556,15 @@ configure_bm(){
 }
 # Execute workflow based on execute_workflow variable. ALL, STATIC_MASK, DYNAMIC_MASK, CLE, RLE
 configure_bm
+
 if [ "$execute_workflow" == "ALL" ]; then
   configure_static_mask_database_proxy
   configure_dynamic_mask_database_proxy
+  configure_cle_database_proxy
+  configure_rle_database_proxy
+  configure_dle_database_proxy
+  configure_rqe_database_proxy
+elif [ "$execute_workflow" == "ENCRYPTION" ]; then
   configure_cle_database_proxy
   configure_rle_database_proxy
   configure_dle_database_proxy
@@ -2214,6 +2578,8 @@ elif [ "$execute_workflow" == "RLE" ]; then
   configure_rle_database_proxy
 elif [ "$execute_workflow" == "DLE" ]; then
   configure_dle_database_proxy
+elif [ "$execute_workflow" == "RQE" ]; then
+  configure_rqe_database_proxy
 else
   echo "Invalid workflow. Exiting script." >&2
   exit 1
