@@ -1,10 +1,43 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Ask user for IP, user credential and Workflow"
+Description: "Create a resources for Baffle Data Protection as per selected workflow"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Baffle Data Protection Workflow"
+        Parameters:
+          - Workflow
+      -
+        Label:
+          default: "Baffle Manager and PG Admin UI credential"
+        Parameters:
+          - UserEmail
+          - UserPassword
+      -
+        Label:
+          default: "Database Admin password"
+        Parameters:
+          - DBPassword
+      -
+        Label:
+          default: "User IP to whitelist (https://checkip.amazonaws.com)"
+        Parameters:
+          - MyIP
 
 Parameters:
-  MyIP:
-    Description: "User IP to be whitelisted"
+  Workflow:
+    Description: "Select workflow to create required resources"
     Type: String
+    Default: "ALL"
+    AllowedValues:
+      - "ALL"
+      - "STATIC_MASK"
+      - "DYNAMIC_MASK"
+      - "CLE"
+      - "RLE"
+      - "DLE"
 
   UserEmail:
     Description: "Email for Baffle Manage and PGAdmin UI user"
@@ -20,31 +53,9 @@ Parameters:
     Type: String
     NoEcho: true
 
-  Workflow:
-    Description: "Setup resource for selected workflow"
+  MyIP:
+    Description: "User IP to be whitelisted"
     Type: String
-    Default: "ALL"
-    AllowedValues:
-      - "ALL"
-      - "STATIC_MASK"
-      - "DYNAMIC_MASK"
-      - "CLE"
-      - "RLE"
-      - "DLE"
-
-Metadata:
-  Instances:
-    Description: "EC2 Instance that runs the Baffle Services (Shield, Manager, PGAdmin UI)"
-  Databases:
-    Description: "RDS database for source and target"
-  Key:
-    Description: "AWS KMS used for Key Encryption Key (KEK)"
-  S3Bucket:
-    Description: "S3 Bucket used to store Data Encryption Key (DEK)"
-  DMSInstance:
-    Description: "DMS Instance and Task to migrate data"
-  LambdaFunction:
-    Description: "Utility Functions to delete S3 bucket and Start DMS Task"
 
 Mappings:
   RegionMap:
