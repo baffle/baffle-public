@@ -1,12 +1,12 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Create a resources for Baffle Data Protection as per selected workflow"
+Description: "Create a resources needed for Baffle Data Protection for Databases"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       -
         Label:
-          default: "Baffle Data Protection Workflow"
+          default: "Baffle Data Protection for Databases Workflow"
         Parameters:
           - Workflow
       -
