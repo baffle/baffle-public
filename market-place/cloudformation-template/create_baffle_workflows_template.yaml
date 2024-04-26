@@ -586,7 +586,7 @@ Resources:
       Password: !Ref DBPassword
       ServerName: !GetAtt BaffleDB.Endpoint.Address
       Port: 5432
-      DatabaseName: "sales"
+      DatabaseName: "dms_source_db"
       SslMode: "require"
 
   DMSTargetEndpoint:
@@ -600,7 +600,7 @@ Resources:
       Password: !Ref DBPassword
       ServerName: !GetAtt BaffleEC2Instance.PublicDnsName
       Port: 5432
-      DatabaseName: "sales_dev"
+      DatabaseName: "dms_target_db"
       SslMode: "none"
 
   DMSMigrationTask:
