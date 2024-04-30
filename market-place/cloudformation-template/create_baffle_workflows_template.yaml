@@ -40,6 +40,7 @@ Parameters:
       - "CLE"
       - "RLE"
       - "DLE"
+      - "RQE_MIGRATION"
 
   UserEmail:
     Description: "Email for Baffle Manage and PGAdmin UI user"
@@ -84,6 +85,10 @@ Conditions:
   IsDLE: !Equals
     - !Ref Workflow
     - "DLE"
+
+  IsRQE: !Equals
+    - !Ref Workflow
+    - "RQE_MIGRATION"
 
   CreateDMS: !Or
     - !Condition IsAll
@@ -260,7 +265,7 @@ Resources:
       Parameters:
         rds.force_ssl: 0
         rds.logical_replication: 1
-        shared_preload_libraries:  "pg_stat_statements, plrust"
+        shared_preload_libraries:  "pg_stat_statements, pg_tle"
 
   BaffleDB:
     Type: "AWS::RDS::DBInstance"
