@@ -1,10 +1,46 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Ask user for IP, and user credential"
+Description: "Create a resources needed for Baffle Data Protection for Databases"
+
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Baffle Data Protection for Databases Workflow"
+        Parameters:
+          - Workflow
+      -
+        Label:
+          default: "Baffle Manager and PG Admin UI credential"
+        Parameters:
+          - UserEmail
+          - UserPassword
+      -
+        Label:
+          default: "Database Admin password"
+        Parameters:
+          - DBPassword
+      -
+        Label:
+          default: "User IP to whitelist (https://checkip.amazonaws.com)"
+        Parameters:
+          - MyIP
+
 
 Parameters:
-  MyIP:
-    Description: "User IP to be whitelisted"
+  Workflow:
+    Description: "Select workflow to create required resources"
     Type: String
+    Default: "ALL"
+    AllowedValues:
+      - "ALL"
+      - "STATIC_MASK"
+      - "DYNAMIC_MASK"
+      - "CLE"
+      - "RLE"
+      - "DLE"
+      - "RQE_MIGRATION"
 
   UserEmail:
     Description: "Email for Baffle Manage and PGAdmin UI user"
@@ -20,31 +56,48 @@ Parameters:
     Type: String
     NoEcho: true
 
-  Workflow:
-    Description: "Setup resource for selected workflow"
+  MyIP:
+    Description: "User IP to be whitelisted"
     Type: String
-    Default: "ALL"
-    AllowedValues:
-      - "ALL"
-      - "STATIC_MASK"
-      - "DYNAMIC_MASK"
-      - "CLE"
-      - "RLE"
-      - "DLE"
 
-Metadata:
-  Instances:
-    Description: "EC2 Instance that runs the Baffle Services (Shield, Manager, PGAdmin UI)"
-  Databases:
-    Description: "RDS database for source and target"
-  Key:
-    Description: "AWS KMS used for Key Encryption Key (KEK)"
-  S3Bucket:
-    Description: "S3 Bucket used to store Data Encryption Key (DEK)"
-  DMSInstance:
-    Description: "DMS Instance and Task to migrate data"
-  LambdaFunction:
-    Description: "Utility Functions to delete S3 bucket and Start DMS Task"
+
+Conditions:
+  IsAll: !Equals
+    - !Ref Workflow
+    - "ALL"
+
+  IsStaticMask: !Equals
+    - !Ref Workflow
+    - "STATIC_MASK"
+
+  IsDynamicMask: !Equals
+    - !Ref Workflow
+    - "DYNAMIC_MASK"
+
+  IsCLE: !Equals
+    - !Ref Workflow
+    - "CLE"
+
+  IsRLE: !Equals
+    - !Ref Workflow
+    - "RLE"
+
+  IsDLE: !Equals
+    - !Ref Workflow
+    - "DLE"
+
+  IsRQE: !Equals
+    - !Ref Workflow
+    - "RQE_MIGRATION"
+
+  CreateDMS: !Or
+    - !Condition IsAll
+    - !Condition IsStaticMask
+
+  CreateMultipleKeys: !Or
+    - !Condition IsAll
+    - !Condition IsRLE
+    - !Condition IsDLE
 
 Mappings:
   RegionMap:
@@ -212,7 +265,7 @@ Resources:
       Parameters:
         rds.force_ssl: 0
         rds.logical_replication: 1
-        shared_preload_libraries:  "pg_stat_statements, plrust"
+        shared_preload_libraries:  "pg_stat_statements, pg_tle"
 
   BaffleDB:
     Type: "AWS::RDS::DBInstance"
@@ -329,6 +382,7 @@ Resources:
 
   BaffleShield2Key:
     Type: "AWS::KMS::Key"
+    Condition: CreateMultipleKeys
     Properties:
       Description: "Baffle AWS Key"
       KeyPolicy:
@@ -367,12 +421,14 @@ Resources:
 
   BaffleShield2KeyAlias:
     Type: "AWS::KMS::Alias"
+    Condition: CreateMultipleKeys
     Properties:
       AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-2"
       TargetKeyId: !Ref BaffleShield2Key
 
   BaffleShield3Key:
     Type: "AWS::KMS::Key"
+    Condition: CreateMultipleKeys
     Properties:
       Description: "Baffle AWS Key"
       KeyPolicy:
@@ -411,6 +467,7 @@ Resources:
 
   BaffleShield3KeyAlias:
     Type: "AWS::KMS::Alias"
+    Condition: CreateMultipleKeys
     Properties:
       AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-3"
       TargetKeyId: !Ref BaffleShield3Key
@@ -460,29 +517,50 @@ Resources:
           GroupSet:
             - !GetAtt BaffleEC2SecurityGroup.GroupId
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          echo "export USERNAME='${UserEmail}'" >> /etc/environment
-          echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
-          echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
-          echo "export DB_USER_NAME='baffle'" >> /etc/environment
-          echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
-          echo "export KM_AWS_REGION='US_WEST_2'" >> /etc/environment
-          echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
-          echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
-          echo "export KM_KEK_NAME_1='${BaffleShield2KeyAlias}'" >> /etc/environment
-          echo "export KM_KEK_NAME_2='${BaffleShield3KeyAlias}'" >> /etc/environment
-          echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
-          source /etc/environment
-          # Setup docker
-          sudo service docker start >> output.txt 2>&1
-          cd /home/ec2-user
-          wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/bm-automated-workflows.sh
-          chmod +x bm-automated-workflows.sh >> output.txt 2>&1
-          sudo ./bm-automated-workflows.sh >> output.txt 2>&1
+        !If
+        - CreateMultipleKeys
+        - Fn::Base64: !Sub |
+            #!/bin/bash
+            echo "export USERNAME='${UserEmail}'" >> /etc/environment
+            echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+            echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
+            echo "export DB_USER_NAME='baffle'" >> /etc/environment
+            echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+            echo "export KM_AWS_REGION='US_WEST_2'" >> /etc/environment
+            echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
+            echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
+            echo "export KM_KEK_NAME_1='${BaffleShield2KeyAlias}'" >> /etc/environment
+            echo "export KM_KEK_NAME_2='${BaffleShield3KeyAlias}'" >> /etc/environment
+            echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+            source /etc/environment
+            # Setup docker
+            sudo service docker start >> output.txt 2>&1
+            cd /home/ec2-user
+            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/bm-automated-workflows.sh
+            chmod +x bm-automated-workflows.sh >> output.txt 2>&1
+            sudo ./bm-automated-workflows.sh >> output.txt 2>&1
+        - Fn::Base64: !Sub |
+            #!/bin/bash
+            echo "export USERNAME='${UserEmail}'" >> /etc/environment
+            echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+            echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
+            echo "export DB_USER_NAME='baffle'" >> /etc/environment
+            echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+            echo "export KM_AWS_REGION='US_WEST_2'" >> /etc/environment
+            echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
+            echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
+            echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+            source /etc/environment
+            # Setup docker
+            sudo service docker start >> output.txt 2>&1
+            cd /home/ec2-user
+            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/bm-automated-workflows.sh
+            chmod +x bm-automated-workflows.sh >> output.txt 2>&1
+            sudo ./bm-automated-workflows.sh >> output.txt 2>&1
 
   DMSReplicationSubnetGroup:
     Type: "AWS::DMS::ReplicationSubnetGroup"
+    Condition: CreateDMS
     Properties:
       ReplicationSubnetGroupDescription: "DMS Replication Subnet group"
       SubnetIds:
@@ -491,6 +569,7 @@ Resources:
 
   DMSReplicationInstance:
     Type: "AWS::DMS::ReplicationInstance"
+    Condition: CreateDMS
     DependsOn: BaffleEC2Instance
     Properties:
       ReplicationInstanceIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance" ] ]
@@ -503,6 +582,7 @@ Resources:
 
   DMSSourceEndpoint:
     Type: "AWS::DMS::Endpoint"
+    Condition: CreateDMS
     Properties:
       EndpointIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance-source-endpoint" ] ]
       EndpointType: "source"
@@ -511,11 +591,12 @@ Resources:
       Password: !Ref DBPassword
       ServerName: !GetAtt BaffleDB.Endpoint.Address
       Port: 5432
-      DatabaseName: "sales"
+      DatabaseName: "dms_source_db"
       SslMode: "require"
 
   DMSTargetEndpoint:
     Type: "AWS::DMS::Endpoint"
+    Condition: CreateDMS
     Properties:
       EndpointIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance-target-endpoint" ] ]
       EndpointType: "target"
@@ -524,11 +605,12 @@ Resources:
       Password: !Ref DBPassword
       ServerName: !GetAtt BaffleEC2Instance.PublicDnsName
       Port: 5432
-      DatabaseName: "sales_dev"
+      DatabaseName: "dms_target_db"
       SslMode: "none"
 
   DMSMigrationTask:
     Type: "AWS::DMS::ReplicationTask"
+    Condition: CreateDMS
     Properties:
       ReplicationTaskIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance-task" ] ]
       SourceEndpointArn: !Ref DMSSourceEndpoint
@@ -592,13 +674,16 @@ Outputs:
     Value: !Join [ "", [ "http://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8446" ] ]
 
   DMSMigrationTaskURL:
+    Condition: CreateDMS
     Description: "URL for the DMS migration task"
     Value: !Join [ "", [ "https://", !Ref "AWS::Region", ".console.aws.amazon.com/dms/v2/home?region=",  !Ref "AWS::Region", "#taskDetails/", !Ref "AWS::StackName", "-replication-instance-task" ] ]
 
   StartMigrationTask:
+    Condition: CreateDMS
     Description: "Command to start DMS migration task"
     Value: !Join [ "", [ "aws dms start-replication-task --replication-task-arn ", !Ref DMSMigrationTask, " --start-replication-task-type start-replication" ] ]
 
   StopMigrationTask:
+    Condition: CreateDMS
     Description: "Command to stop DMS migration task"
     Value: !Join [ "", [ "aws dms stop-replication-task --replication-task-arn ", !Ref DMSMigrationTask ] ]
