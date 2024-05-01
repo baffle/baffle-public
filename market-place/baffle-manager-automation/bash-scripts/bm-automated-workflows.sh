@@ -1134,7 +1134,8 @@ start_bm(){
 
 start_pg_admin(){
   # change the current directory
-  cd /home/ec2-user/pg-admin
+   mkdir -p /home/ec2-user/pg-admin
+   cd /home/ec2-user/pg-admin
   # create server.json based on $execute_workflow
   if [ "$execute_workflow" == "DYNAMIC_MASK" ]; then
     group="dynamic-mask"
@@ -1304,6 +1305,29 @@ echo "$pgpass_content" > pgpass
 
   chmod 644 pgpass
   # Start pgAdmin
+
+  #create docker-compose.yml file
+  printf '
+version: "3.3"
+services:
+  pgAdmin:
+    image: dpage/pgadmin4
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${USERNAME}
+      - PGADMIN_DEFAULT_PASSWORD=${PASSWORD}
+    ports:
+      - '8446:80'
+    volumes:
+       - ./servers.json:/pgadmin4/servers.json
+       - ./pgpass:/pgadmin4/pgpass
+    restart: always
+    networks:
+      - baffle_network-frontend
+networks:
+  baffle_network-frontend:
+    external: true
+  ' > docker-compose.yml
+
   docker-compose up -d &
 
   # sleep for 10 seconds
@@ -1944,7 +1968,6 @@ configure_dle_database_proxy(){
 
   # Get DPP payload
   dle_dpp_payload=$(get_ssn_ccn_dle_dpp_payload "dle-ssn-ccn-dpp" "$ds_dle_t1_id" "$ds_dle_t2_id" "$dle_tenant1_id" "$dle_tenant2_id")
-  echo "DLE DPP payload: $dle_dpp_payload" >&2
   # Enroll DPP
   dle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$dle_dpp_payload" "id")
   if [ "$dle_dpp_id" == "error" ]; then
@@ -2044,6 +2067,7 @@ create_rqe_db_install_udfs(){
   execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "CREATE DATABASE $db_name;")
   execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "create schema baffle_udfs;")
   execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA baffle_udfs TO $db_user_name;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "create extension if not exists pg_tle;")
   execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "GRANT pgtle_admin TO $db_user_name;")
   echo "Creating UDFs..."
   execution_status=$(execute_sql_file "$db_host_name" "$db_port" "$db_user_name" "$db_name" "/home/ec2-user/AE-2/ae2_udfs_plpgsql_pg_tle.sql")
