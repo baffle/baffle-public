@@ -105,7 +105,7 @@ Mappings:
     us-west-1:
       AMI: ami-07fb368d206816822
     us-west-2:
-      AMI: ami-016e0f1d4d1a6fd30
+      AMI: ami-03670f877b3de3206
     us-east-1:
       AMI: ami-07fb368d206816822
     us-east-2:
