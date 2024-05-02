@@ -1278,7 +1278,190 @@ start_pg_admin(){
                                           }
                                         }
                                     }')
+    elif [ "$execute_workflow" == "ALL" ]; then
+      servers_json=$(jq -n \
+                        --arg db_host_name "$db_host_name" \
+                        --argjson db_port "$db_port" \
+                        --arg db_user_name "$db_user_name" \
+                        --argjson shield_static_mask_port "$shield_static_mask_port" \
+                        --arg shield_dynamic_mask_host "$shield_dynamic_mask_host" \
+                        --argjson shield_dynamic_mask_port "$shield_dynamic_mask_port" \
+                        --arg shield_cle_host "$shield_cle_host" \
+                        --argjson shield_cle_port "$shield_cle_port" \
+                        --arg shield_rle_host "$shield_rle_host" \
+                        --argjson shield_rle_port "$shield_rle_port" \
+                        --arg shield_dle_host "$shield_dle_host" \
+                        --argjson shield_dle_port "$shield_dle_port" \
+                        --arg shield_rqe_host "$shield_rqe_host" \
+                        --argjson shield_rqe_port "$shield_rqe_port" \
+                        --arg shield_rqe_migration_host "$shield_rqe_migration_host" \
+                        --argjson shield_rqe_migration_port "$shield_rqe_migration_port" \
+                        '{
+                          "Servers": {
+                            "1": {
+                              "Name": "direct@baffle",
+                              "Group": "dms-static-mask",
+                              "Host": $db_host_name,
+                              "Port": $shield_static_mask_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "2": {
+                              "Name": "direct@baffle",
+                              "Group": "dynamic-mask",
+                              "Host": $db_host_name,
+                              "Port": $db_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "3": {
+                              "Name": "shield@baffle",
+                              "Group": "dynamic-mask",
+                              "Host": $shield_dynamic_mask_host,
+                              "Port": $shield_dynamic_mask_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "4": {
+                              "Name": "Shield@harry_HR",
+                              "Group": "dynamic-mask",
+                              "Host": $shield_dynamic_mask_host,
+                              "Port": $shield_dynamic_mask_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "harry",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "5": {
+                              "Name": "Shield@sally_support",
+                              "Group": "dynamic-mask",
+                              "Host": $shield_dynamic_mask_host,
+                              "Port": $shield_dynamic_mask_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "sally",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "6": {
+                              "Name": "Shield@ron_remote",
+                              "Group": "dynamic-mask",
+                              "Host": $shield_dynamic_mask_host,
+                              "Port": $shield_dynamic_mask_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "ron",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "7": {
+                              "Name": "Shield@baffle",
+                              "Group": "cle",
+                              "Host": $shield_cle_host,
+                              "Port": $shield_cle_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "baffle",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "8": {
+                              "Name": "direct@baffle",
+                              "Group": "cle",
+                              "Host": $db_host_name,
+                              "Port": $db_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "9": {
+                              "Name": "Shield@baffle",
+                              "Group": "rle",
+                              "Host": $shield_rle_host,
+                              "Port": $shield_rle_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "baffle",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "10": {
+                              "Name": "direct@baffle",
+                              "Group": "rle",
+                              "Host": $db_host_name,
+                              "Port": $db_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "11": {
+                              "Name": "Shield@baffle",
+                              "Group": "dle",
+                              "Host": $shield_dle_host,
+                              "Port": $shield_dle_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "baffle",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "12": {
+                              "Name": "direct@baffle",
+                              "Group": "dle",
+                              "Host": $db_host_name,
+                              "Port": $db_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "13": {
+                              "Name": "Shield@baffle",
+                              "Group": "rqe",
+                              "Host": $shield_rqe_host,
+                              "Port": $shield_rqe_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "baffle",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "14": {
+                              "Name": "direct@baffle",
+                              "Group": "rqe",
+                              "Host": $db_host_name,
+                              "Port": $db_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "15": {
+                              "Name": "Shield@baffle",
+                              "Group": "rqe-migration",
+                              "Host": $shield_rqe_migration_host,
+                              "Port": $shield_rqe_migration_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "baffle",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "16": {
+                              "Name": "direct@baffle",
+                              "Group": "rqe-migration",
+                              "Host": $db_host_name,
+                              "Port": $db_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            }
+                          }
+                        }')
     fi
+
 
 
   echo  "Starting pgAdmin..." >&2
@@ -2375,6 +2558,7 @@ if [ "$execute_workflow" == "ALL" ]; then
   configure_rle_database_proxy
   configure_dle_database_proxy
   configure_rqe_database_proxy
+  configure_rqe_migration_database_proxy
 elif [ "$execute_workflow" == "ENCRYPTION" ]; then
   configure_cle_database_proxy
   configure_rle_database_proxy
