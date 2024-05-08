@@ -42,65 +42,15 @@ Parameters:
 
 Mappings:
   RegionMap:
-    us-east-1:
-      AMI: ami-0426114d91757ed49
-    us-east-2:
-      AMI: ami-0426114d91757ed49
+    # Update the AMI later with public AMI from each region
     us-west-1:
-      AMI: ami-0426114d91757ed49
+      AMI: ami-005c2b15429173b7b
     us-west-2:
-      AMI: ami-0426114d91757ed49
-    af-south-1:
-      AMI: ami-0426114d91757ed49
-    ap-east-1:
-      AMI: ami-0426114d91757ed49
-    ap-south-1:
-      AMI: ami-0426114d91757ed49
-    ap-south-2:
-      AMI: ami-0426114d91757ed49
-    ap-southeast-1:
-      AMI: ami-0426114d91757ed49
-    ap-southeast-2:
-      AMI: ami-0426114d91757ed49
-    ap-southeast-3:
-      AMI: ami-0426114d91757ed49
-    ap-southeast-4:
-      AMI: ami-0426114d91757ed49
-    ap-northeast-1:
-      AMI: ami-0426114d91757ed49
-    ap-northeast-2:
-      AMI: ami-0426114d91757ed49
-    ap-northeast-3:
-      AMI: ami-0426114d91757ed49
-    ca-central-1:
-      AMI: ami-0426114d91757ed49
-    ca-west-1:
-      AMI: ami-0426114d91757ed49
-    eu-central-1:
-      AMI: ami-0426114d91757ed49
-    eu-central-2:
-      AMI: ami-0426114d91757ed49
-    eu-west-1:
-      AMI: ami-0426114d91757ed49
-    eu-west-2:
-      AMI: ami-0426114d91757ed49
-    eu-west-3:
-      AMI: ami-0426114d91757ed49
-    eu-south-1:
-      AMI: ami-0426114d91757ed49
-    eu-south-2:
-      AMI: ami-0426114d91757ed49
-    eu-north-1:
-      AMI: ami-0426114d91757ed49
-    il-central-1:
-      AMI: ami-0426114d91757ed49
-    me-south-1:
-      AMI: ami-0426114d91757ed49
-    me-central-1:
-      AMI: ami-0426114d91757ed49
-    sa-east-1:
-      AMI: ami-0426114d91757ed49
-
+      AMI: ami-005c2b15429173b7b
+    us-east-1:
+      AMI: ami-005c2b15429173b7b
+    us-east-2:
+      AMI: ami-005c2b15429173b7b
 
 Resources:
   BaffleVPC:
