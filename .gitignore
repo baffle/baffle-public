@@ -1,1 +1,3 @@
 /market-place/cloudformation-template/.envrc
+/dotnet/BaffleSDK/bin/
+/dotnet/BaffleSDK/obj/
