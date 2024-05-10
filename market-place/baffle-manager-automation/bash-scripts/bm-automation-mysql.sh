@@ -1,23 +1,12 @@
 #!/bin/bash
 
 # Input parameters
-username=devops@baffle.io
-password=BaffleDevops@3979
 # Database info
-db_host_name=10.0.21.185
-db_port=3306
-db_user_name=admin
-db_password=BaffleAdmin#3945
 #Keystore info
 aws_region=us-west-2
-s3_bucket_name=baffle-cs-bucket
 # Kek info
-kek_name=alias/baffle-cs-cmk
-kek_name_1=alias/baffle-cs-cmk2
-kek_name_2=alias/baffle-cs-cmk3
 
 # Base URL
-base_url="https://a4d7f4828b10b437d8301784a520888f-498373662.us-west-2.elb.amazonaws.com"
 
 # Login API URL
 checkAppUrl="$base_url/api/public/v2/application_access_check"
