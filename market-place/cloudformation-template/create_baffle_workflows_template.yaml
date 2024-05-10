@@ -348,6 +348,13 @@ Resources:
       ToPort: 5432
       CidrIp: !GetAtt BaffleVPC.CidrBlock
 
+  BaffleDBSecurityGroupEgressFromSameVPC:
+    Type: "AWS::EC2::SecurityGroupEgress"
+    Properties:
+      GroupId: !GetAtt BaffleDBSecurityGroup.GroupId
+      IpProtocol: -1
+      CidrIp: !GetAtt BaffleVPC.CidrBlock
+
   BaffleShieldRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -530,6 +537,18 @@ Resources:
           FromPort: 5432
           ToPort: 5432
           CidrIp: !GetAtt BaffleVPC.CidrBlock
+      SecurityGroupEgress:
+        - Description: Allow all outbound traffic to user
+          IpProtocol: "-1"
+          CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+        - Description: Allow 443 to outside, needed to download script from github
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - Description: Allow all outbound traffic to VPC
+          IpProtocol: "-1"
+          CidrIp:  !GetAtt BaffleVPC.CidrBlock
       VpcId: !Ref BaffleVPC
 
   BaffleShieldInstanceProfile:
