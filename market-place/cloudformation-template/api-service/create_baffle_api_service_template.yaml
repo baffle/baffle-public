@@ -367,9 +367,9 @@ Resources:
             # Setup docker
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
-            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/bm-automated-workflows.sh
-            chmod +x bm-automated-workflows.sh >> output.txt 2>&1
-            sudo ./bm-automated-workflows.sh >> output.txt 2>&1
+            wget https://raw.githubusercontent.com/baffle/baffle-public/api-svc/market-place/baffle-manager-automation/bash-scripts/bm-automated-api-svc.sh
+            chmod +x bm-automated-api-svc >> output.txt 2>&1
+            sudo ./bm-automated-api-svc >> output.txt 2>&1
         - Fn::Base64: !Sub |
             #!/bin/bash
             echo "export USERNAME='${UserEmail}'" >> /etc/environment
@@ -382,9 +382,9 @@ Resources:
             # Setup docker
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
-            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/bm-automated-workflows.sh
-            chmod +x bm-automated-workflows.sh >> output.txt 2>&1
-            sudo ./bm-automated-workflows.sh >> output.txt 2>&1
+            wget https://raw.githubusercontent.com/baffle/baffle-public/api-svc/market-place/baffle-manager-automation/bash-scripts/bm-automated-api-svc.sh
+            chmod +x bm-automated-api-svc >> output.txt 2>&1
+            sudo ./bm-automated-api-svc >> output.txt 2>&1
 Outputs:
 
   StackRegion:

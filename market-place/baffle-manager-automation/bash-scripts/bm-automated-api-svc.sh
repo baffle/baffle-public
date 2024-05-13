@@ -396,7 +396,7 @@ networks:
 
 start_bm(){
   # change the current directory
-  cd /opt/baffle
+  cd /opt/manager
   # Start the Baffle Manager service
   docker-compose up -d &
 }
