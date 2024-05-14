@@ -48,13 +48,13 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0bf9f8eb3ce9d4824
+      AMI: ami-015d949c0f466fd2b
     us-east-2:
-      AMI: ami-0bf9f8eb3ce9d4824
+      AMI: ami-015d949c0f466fd2b
     us-west-1:
-      AMI: ami-0bf9f8eb3ce9d4824
+      AMI: ami-015d949c0f466fd2b
     us-west-2:
-      AMI: ami-0bf9f8eb3ce9d4824
+      AMI: ami-015d949c0f466fd2b
 
 Resources:
   BaffleVPC:
