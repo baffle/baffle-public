@@ -13,7 +13,7 @@ kek_name_2=$KM_KEK_NAME_2
 
 execute_workflow=$EXECUTE_WORKFLOW
 
-secret_key=$SECRET_KEY
+jwt_key="qwertyuiopasdfghjklzxcvbnm12345689789qwertyuiop"
 
 # Base URL
 base_url="https://localhost:443"
