@@ -26,7 +26,7 @@ Parameters:
     AllowedValues:
       - "Standard"
       - "BYOK"
-      -
+
   UserEmail:
     Description: "Email for Baffle Manage and PGAdmin UI user"
     Type: String
@@ -48,13 +48,13 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-03908d35943c7e0b3
+      AMI: ami-0bf9f8eb3ce9d4824
     us-east-2:
-      AMI: ami-03908d35943c7e0b3
+      AMI: ami-0bf9f8eb3ce9d4824
     us-west-1:
-      AMI: ami-03908d35943c7e0b3
+      AMI: ami-0bf9f8eb3ce9d4824
     us-west-2:
-      AMI: ami-03908d35943c7e0b3
+      AMI: ami-0bf9f8eb3ce9d4824
 
 Resources:
   BaffleVPC:
@@ -368,8 +368,8 @@ Resources:
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
             wget https://raw.githubusercontent.com/baffle/baffle-public/api-svc/market-place/baffle-manager-automation/bash-scripts/bm-automated-api-svc.sh
-            chmod +x bm-automated-api-svc >> output.txt 2>&1
-            sudo ./bm-automated-api-svc >> output.txt 2>&1
+            chmod +x bm-automated-api-svc.sh >> output.txt 2>&1
+            sudo ./bm-automated-api-svc.sh >> output.txt 2>&1
         - Fn::Base64: !Sub |
             #!/bin/bash
             echo "export USERNAME='${UserEmail}'" >> /etc/environment
@@ -383,8 +383,8 @@ Resources:
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
             wget https://raw.githubusercontent.com/baffle/baffle-public/api-svc/market-place/baffle-manager-automation/bash-scripts/bm-automated-api-svc.sh
-            chmod +x bm-automated-api-svc >> output.txt 2>&1
-            sudo ./bm-automated-api-svc >> output.txt 2>&1
+            chmod +x bm-automated-api-svc.sh >> output.txt 2>&1
+            sudo ./bm-automated-api-svc.sh >> output.txt 2>&1
 Outputs:
 
   StackRegion:

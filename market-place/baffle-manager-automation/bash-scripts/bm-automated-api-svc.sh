@@ -13,6 +13,8 @@ kek_name_2=$KM_KEK_NAME_2
 
 execute_workflow=$EXECUTE_WORKFLOW
 
+secret_key=$SECRET_KEY
+
 # Base URL
 base_url="https://localhost:443"
 
@@ -25,6 +27,9 @@ aws_kms_url="$base_url/api/v2/keystores/awskms"
 kek_url="$base_url/api/v2/key-management/keks"
 dpp_url="$base_url/api/v2/dpp"
 tenant_url="$base_url/api/v2/key-management/tenants"
+permission_url="$base_url/api/v3/api-svc/permissions"
+api_service_url="$base_url/api/v3/api-svc/clusters"
+api_service__ff_test_url="$base_url/api/v3/api-svc/clusters?ff_test=1"
 
 api_service_image=baffle-api-service:Release-Baffle.2.8.4.4
 controller_image=baffle-controller-service:Release-Baffle.2.8.4.4
@@ -212,18 +217,34 @@ get_tenant_payload(){
   echo "$tenant_payload"
 }
 
-# Get DB Proxy payload
-get_api_svc_payload(){
-  db_proxy_access_payload=$(jq -n \
+# Get api service permission payload
+get_api_svc_permission_payload(){
+  api_svc_permission_payload=$(jq -n \
                         --arg name "$1" \
-                        --arg database_id "$2" \
-                        --arg aws_kms_id "$3" \
-                        --arg kek_id "$4" \
+                        --arg role "$2" \
+                        --arg permission "$3" \
                         '{
                           "name": $name,
-                          "database": {
-                            "id": $database_id
-                          },
+                          "roles": [
+                            $role
+                          ],
+                          "permissions": [
+                              $permission
+                            ]
+                        }')
+
+  echo "$api_svc_permission"
+}
+
+# Get DB Proxy payload
+get_api_svc_cle_payload(){
+  api_svc_cle_payload=$(jq -n \
+                        --arg name "$1" \
+                        --arg aws_kms_id "$2" \
+                        --arg kek_id "$3" \
+                        --arg secret_key "4" \
+                        '{
+
                           "keystore": {
                             "id": $aws_kms_id
                           },
@@ -231,9 +252,50 @@ get_api_svc_payload(){
                             "id": $kek_id
                           },
                           "encryption": true
+
+                          "name": $name,
+                          "jwtAuth": {
+                            "name": $name,
+                            "jwtEnable": true,
+                            "jwtAuthConfig": {
+                              "claims": [
+                                {
+                                  "key": "aud",
+                                  "values": "bafapi.baffle.io"
+                                },
+                                {
+                                  "key": "sub",
+                                  "values": "admin@baffle.io"
+                                },
+                                {
+                                  "key": "iss",
+                                  "values": "https://bafapi.baffle.io"
+                                },
+                              ],
+                              "auditLog": {
+                                "logAllAccess": true,
+                                "property": [
+                                  "aud",
+                                  "roles",
+                                  "iat"
+                                ]
+                              }
+                            },
+                            "secretKey": $secret_key
+                          },
+                          "global": true,
+                          "multiTenancy": false,
+                          "globalEnc": {
+                            "keystore": {
+                              "id": $aws_kms_id
+                            },
+                            "kek": {
+                              "id": $kek_id
+                            }
+                          }
                         }')
 
-  echo "$db_proxy_access_payload"
+  echo "$api_svc_cle_payload"
 }
 
 # get Deployment payload
@@ -480,7 +542,7 @@ configure_bm(){
   else
     echo "DEK ID: $dek_id" >&2
   fi
-  # write  if condition for workflows ALL, RLE, DLE
+  # write  if condition for workflows RLE
   if [ "$execute_workflow" == "BYOK" ]; then
     # Enroll KEK-1
       kek1_payload=$(get_kek_payload "$kek_name_1" "$aws_kms_id" )
@@ -492,6 +554,19 @@ configure_bm(){
         echo "KEK-1 ID: $kek1_id" >&2
       fi
   fi
+
+  #create API service permission
+  admin_permission_payload=$(get_api_svc_permission_payload "admin-role" "admin" "ALLOW_ALL")
+  admin_permission_id=$(send_post_request "$jwt_token" "$kek_url" "$admin_permission_payload" "id")
+
+  encrypt_permission_payload=$(get_api_svc_permission_payload "encrypt-role" "encrypt" "ENCRYPT")
+  encrypt_permission_id=$(send_post_request "$jwt_token" "$kek_url" "$encrypt_permission_payload" "id")
+
+  decrypt_permission_payload=$(get_api_svc_permission_payload "decrypt-role" "decrypt" "DECRYPT")
+  decrypt_permission_id=$(send_post_request "$jwt_token" "$kek_url" "$decrypt_permission_payload" "id")
+
+  #set ff_test
+  send_get_request "$jwt_token" "$api_service__ff_test_url"
 }
 
 # Execute workflow based on execute_workflow variable.
