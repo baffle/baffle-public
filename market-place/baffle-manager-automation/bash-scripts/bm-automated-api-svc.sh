@@ -375,7 +375,8 @@ configure_cle_api_service(){
     export "SYNC_ID=$cle_syncId"
   fi
 
-  private_ip=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+  aws_metadata_token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+  private_ip=$(curl -H "X-aws-ec2-metadata-token: $aws_metadata_token" http://169.254.169.254/latest/meta-data/local-ipv4)
   echo "Private IP: $private_ip" >&2
   export "BM_URL=https://$private_ip"
 
