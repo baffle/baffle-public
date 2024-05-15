@@ -323,6 +323,9 @@ Resources:
         - Description: Allow all outbound traffic to user
           IpProtocol: "-1"
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+        - Description: Allow all outbound traffic to user
+          IpProtocol: "-1"
+          CidrIp: !GetAtt BaffleVPC.CidrBlock
         - Description: Allow 443 to outside, needed to download script from github
           IpProtocol: tcp
           FromPort: 443
@@ -367,6 +370,7 @@ Resources:
             echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
             echo "export KM_KEK_NAME_1='${BaffleShield2KeyAlias}'" >> /etc/environment
             echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+            echo "export PRIVATE_IP='${BaffleEC2Instance.PrivateIp}'" >> /etc/environment
             source /etc/environment
             # Setup docker
             sudo service docker start >> output.txt 2>&1
@@ -382,6 +386,7 @@ Resources:
             echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
             echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
             echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+            echo "export PRIVATE_IP='${BaffleEC2Instance.PrivateIp}'" >> /etc/environment
             source /etc/environment
             # Setup docker
             sudo service docker start >> output.txt 2>&1
@@ -405,8 +410,8 @@ Outputs:
 
   APIServiceURL:
     Description: "The URL for API Service"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8443" ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444" ] ]
 
   APIServiceHealthCheck:
     Description: "The heal check URL for API Service"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8443", "/api/service/status" ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444", "/api/service/status" ] ]
