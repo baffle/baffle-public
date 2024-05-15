@@ -376,7 +376,7 @@ configure_cle_api_service(){
   fi
 
   private_ip=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
-  echo "Private IP: private_ip" >&2
+  echo "Private IP: $private_ip" >&2
   export "BM_URL=https://$private_ip"
 
   # Start API Service
