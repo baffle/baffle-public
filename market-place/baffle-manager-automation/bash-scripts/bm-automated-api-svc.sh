@@ -299,39 +299,39 @@ get_api_svc_cle_payload(){
                             }
                           },
                           "jwtAuth": {
-                              "name": "jwt-role",
-                              "jwtEnable": true,
-                              "jwtAuthConfig": {
-                                "claims": [
-                                  {
-                                    "key": "aud",
-                                    "values": [
-                                      "bafapi.baffle.io"
-                                    ]
-                                  },
-                                  {
-                                    "key": "aud",
-                                    "values": [
-                                      "bafapi.baffle.io"
-                                    ]
-                                  },
-                                  {
-                                    "key": "iss",
-                                    "values": [
-                                      "bafapi.baffle.io"
-                                    ]
-                                  }
-                                ],
-                                "auditLog": {
-                                  "logAllAccess": true,
-                                  "property": [
-                                    "roles",
-                                    "iat"
+                            "name": "jwt-role",
+                            "jwtEnable": true,
+                            "jwtAuthConfig": {
+                              "claims": [
+                                {
+                                  "key": "aud",
+                                  "values": [
+                                    "bafapi.baffle.io"
+                                  ]
+                                },
+                                {
+                                  "key": "aud",
+                                  "values": [
+                                    "bafapi.baffle.io"
+                                  ]
+                                },
+                                {
+                                  "key": "iss",
+                                  "values": [
+                                    "bafapi.baffle.io"
                                   ]
                                 }
-                              },
-                              "secretKey": "4S3aK8dN1R2bM6P5oH9LgE7cU4F3G2J1F8F9K3M2P1N6R4B5V2C1X9Z0W8E5Y6Q"
-                            }
+                              ],
+                              "auditLog": {
+                                "logAllAccess": true,
+                                "property": [
+                                  "roles",
+                                  "iat"
+                                ]
+                              }
+                            },
+                            "secretKey": "4S3aK8dN1R2bM6P5oH9LgE7cU4F3G2J1F8F9K3M2P1N6R4B5V2C1X9Z0W8E5Y6Q"
+                          }
                         }')
 
   echo "$api_svc_cle_payload"
