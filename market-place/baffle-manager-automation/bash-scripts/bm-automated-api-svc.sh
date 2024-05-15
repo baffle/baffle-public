@@ -12,7 +12,6 @@ kek_name_1=$KM_KEK_NAME_1
 kek_name_2=$KM_KEK_NAME_2
 
 execute_workflow=$EXECUTE_WORKFLOW
-private_ip=$PRIVATE_IP
 # Base URL
 base_url="https://localhost:443"
 
@@ -376,6 +375,8 @@ configure_cle_api_service(){
     export "SYNC_ID=$cle_syncId"
   fi
 
+  private_ip=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+  echo "Private IP: private_ip" >&2
   export "BM_URL=https://$private_ip"
 
   # Start API Service
