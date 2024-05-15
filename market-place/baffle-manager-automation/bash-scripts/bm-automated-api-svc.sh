@@ -502,16 +502,16 @@ configure_cle_api_service(){
 
   # add permission
   add_all_permission=$(get_add_permission_payload)
-  add_all_permission_id=$(send_post_request "$jwt_token" "$api_service_url/$api_rle_id/access-control" "$add_all_permission" "id")
+  add_all_permission_id=$(send_post_request "$jwt_token" "$api_service_url/$api_cle_id/access-control" "$add_all_permission" "id")
    if [ "add_tenant_1_id" == "error" ]; then
      echo "Adding Permisssion  failed. Exiting script." >&2
      exit 1
    else
-     echo "Permisssion Add ID: $add_all_permission_id" >&2
+     echo "Permisssions added" >&2
    fi
 
   deploy_payload=$(get_deploy_payload "deploy-cle")
-  deploy_id=$(send_post_request "$jwt_token" "$api_service_url/$api_rle_id/deployments" "$deploy_payload" "id")
+  deploy_id=$(send_post_request "$jwt_token" "$api_service_url/$api_cle_id/deployments" "$deploy_payload" "id")
   if [ "deploy_id" == "error" ]; then
    echo "Deployment failed. Exiting script." >&2
    exit 1
