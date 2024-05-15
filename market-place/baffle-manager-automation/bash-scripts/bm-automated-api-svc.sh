@@ -22,9 +22,9 @@ login_url="$base_url/api/public/v2/auth"
 
 aws_kms_url="$base_url/api/v2/keystores/awskms"
 kek_url="$base_url/api/v2/key-management/keks"
-dpp_url="$base_url/api/v2/dpp"
 tenant_url="$base_url/api/v2/key-management/tenants"
 api_service_url="$base_url/api/v3/api-svc/clusters"
+permission_url="$base_url/api/v3/api-svc/permissions"
 
 # Function to send a GET request and process the response
 send_get_request() {
@@ -209,6 +209,77 @@ get_tenant_payload(){
   echo "$tenant_payload"
 }
 
+# Get api permission payload
+get_permission_payload(){
+  name=$1
+  roles=$2
+  permissions=$3
+  permission_payload=$(jq -n \
+                --arg name "$name" \
+                --arg roles "$roles" \
+                '{
+                  "name": $name,
+                  "roles": [$roles],
+                  "permissions": '"$permissions"'
+                }')
+
+  echo "$permission_payload"
+}
+
+# Get api permission payload
+get_add_permission_payload(){
+  permission_payload=$(jq -n \
+                --arg all_permission_id "$all_permission_id" \
+                --arg encrypt_permission_id "$encrypt_permission_id" \
+                --arg decrypt_permission_id "$decrypt_permission_id" \
+                '{
+                  "addedPermissions": [
+                  {"id" : $all_permission_id},
+                  {"id" : $encrypt_permission_id},
+                  {"id" : $decrypt_permission_id}]
+                }')
+
+  echo "$permission_payload"
+}
+
+
+# Get Tenant api  enroll payload
+get_tenant_enroll_payload(){
+  tenant_id=$1
+
+  tenant_payload=$(jq -n \
+                --arg tenant_id "$tenant_id" \
+                --arg all_permission_id "$all_permission_id" \
+                --arg encrypt_permission_id "$encrypt_permission_id" \
+                --arg decrypt_permission_id "$decrypt_permission_id" \
+                '{
+                  "tenantKey": {
+                     "id": $tenant_id
+                  },
+                  "permissions":[
+                  {"id" : $all_permission_id},
+                  {"id" : $encrypt_permission_id},
+                  {"id" : $decrypt_permission_id}
+                  ]
+                }')
+
+  echo "$tenant_payload"
+}
+
+# Get deploy payload
+get_deploy_payload(){
+  name=$1
+
+  deploy_payload=$(jq -n \
+                --arg name "$name" \
+                '{
+                  "name" : $name
+                }')
+
+  echo "$deploy_payload"
+}
+
+
 # Get cle api payload
 get_api_svc_cle_payload(){
   api_svc_cle_payload=$(jq -n \
@@ -226,7 +297,41 @@ get_api_svc_cle_payload(){
                             "kek": {
                               "id": $kek_id
                             }
-                          }
+                          },
+                          "jwtAuth": {
+                              "name": "jwt-role",
+                              "jwtEnable": true,
+                              "jwtAuthConfig": {
+                                "claims": [
+                                  {
+                                    "key": "aud",
+                                    "values": [
+                                      "bafapi.baffle.io"
+                                    ]
+                                  },
+                                  {
+                                    "key": "aud",
+                                    "values": [
+                                      "bafapi.baffle.io"
+                                    ]
+                                  },
+                                  {
+                                    "key": "iss",
+                                    "values": [
+                                      "bafapi.baffle.io"
+                                    ]
+                                  }
+                                ],
+                                "auditLog": {
+                                  "logAllAccess": true,
+                                  "property": [
+                                    "roles",
+                                    "iat"
+                                  ]
+                                }
+                              },
+                              "secretKey": "4S3aK8dN1R2bM6P5oH9LgE7cU4F3G2J1F8F9K3M2P1N6R4B5V2C1X9Z0W8E5Y6Q"
+                            }
                         }')
 
   echo "$api_svc_cle_payload"
@@ -240,42 +345,43 @@ get_api_svc_rle_payload(){
                           "name": $name,
                           "global": false,
                           "multiTenancy": true,
+                          "jwtAuth": {
+                            "name": "jwt-role",
+                            "jwtEnable": true,
+                            "jwtAuthConfig": {
+                              "claims": [
+                                {
+                                  "key": "aud",
+                                  "values": [
+                                    "bafapi.baffle.io"
+                                  ]
+                                },
+                                {
+                                  "key": "aud",
+                                  "values": [
+                                    "bafapi.baffle.io"
+                                  ]
+                                },
+                                {
+                                  "key": "iss",
+                                  "values": [
+                                    "bafapi.baffle.io"
+                                  ]
+                                }
+                              ],
+                              "auditLog": {
+                                "logAllAccess": true,
+                                "property": [
+                                  "roles",
+                                  "iat"
+                                ]
+                              }
+                            },
+                            "secretKey": "4S3aK8dN1R2bM6P5oH9LgE7cU4F3G2J1F8F9K3M2P1N6R4B5V2C1X9Z0W8E5Y6Q"
+                          }
                         }')
 
   echo "$api_svc_rle_payload"
-}
-
-# get Deployment payload
-get_deploy_payload(){
-  name=$1
-  dpp_ids=("$@")  # Capture all arguments into an array
-  # remove name from the array
-  unset dpp_ids[0]
-  added_policies="["
-
-  # Loop over the DPP IDs and add them to the JSON string
-  for id in "${dpp_ids[@]}"; do
-    added_policies+="{\"id\": \"$id\"},"
-  done
-
-  # Remove the trailing comma and close the JSON string
-  added_policies=${added_policies%?}
-  added_policies+="]"
-
-
- deploy_payload=$(jq -n \
-                --arg name "$1" \
-                --argjson added_policies "$added_policies" \
-                '{
-                  "name": $name,
-                  "type": "DATA_POLICIES",
-                  "mode": "ADD_POLICIES",
-                  "dataPolicies": {
-                    "addedDataPolicies": $added_policies
-                  }
-                }')
-
-  echo "$deploy_payload"
 }
 
 # Get system admin registration payload
@@ -377,35 +483,6 @@ start_bm(){
   docker-compose up -d &
 }
 
-# Get Tenant api  enroll payload
-get_tenant_enroll_payload(){
-  tenant_id=$1
-
-  tenant_payload=$(jq -n \
-                --arg tenant_id "tenant_id" \
-                '{
-                  "tenantKey": {
-                     "id": $tenant_id
-                  },
-                  "permissions":[]
-                }')
-
-  echo "$tenant_payload"
-}
-
-# Get deploy payload
-get_deploy_payload(){
-  name=$1
-
-  deploy_payload=$(jq -n \
-                --arg name "name" \
-                '{
-                  "name" : $name
-                }')
-
-  echo "$deploy_payload"
-}
-
 ################## Configuration for standard api service ##################
 configure_cle_api_service(){
   echo -e "\n#### Configuring CLE API Service... ####\n" >&2
@@ -423,6 +500,26 @@ configure_cle_api_service(){
     export "SYNC_ID=$cle_syncId"
   fi
 
+  # add permission
+  add_all_permission=$(get_add_permission_payload)
+  add_all_permission_id=$(send_post_request "$jwt_token" "$api_service_url/$api_rle_id/access-control" "$add_all_permission" "id")
+   if [ "add_tenant_1_id" == "error" ]; then
+     echo "Adding Permisssion  failed. Exiting script." >&2
+     exit 1
+   else
+     echo "Permisssion Add ID: $add_all_permission_id" >&2
+   fi
+
+  deploy_payload=$(get_deploy_payload "deploy-cle")
+  deploy_id=$(send_post_request "$jwt_token" "$api_service_url/$api_rle_id/deployments" "$deploy_payload" "id")
+  if [ "deploy_id" == "error" ]; then
+   echo "Deployment failed. Exiting script." >&2
+   exit 1
+  else
+   echo "Deployment ID: $deploy_id" >&2
+  fi
+
+
   # Start API Service
   status=$(start_api_service)
   if [ "$status" == "error" ]; then
@@ -431,12 +528,12 @@ configure_cle_api_service(){
   fi
 }
 
-################## Configuration for RLE Database Proxy ##################
-configure_rle_database_proxy(){
+################## Configuration for RLE api service ##################
+configure_rle_api_service(){
   echo -e "\n#### Configuring RLE API Service.... ####\n" >&2
 
    # Enroll Tenant-1
-    rle_tenant1_payload=$(get_tenant_payload "Rle-Tenant-1" "T-1001" "$aws_kms_id" "$kek1_id" "T-rle-1001-dek")
+    rle_tenant1_payload=$(get_tenant_payload "Rle-Tenant-1" "T-1001" "$aws_kms_id" "$kek_id" "T-rle-1001-dek")
     rle_tenant1_id=$(send_post_request "$jwt_token" "$tenant_url" "$rle_tenant1_payload" "id")
     if [ "$rle_tenant1_id" == "error" ]; then
       echo "RLE Tenant-1 enrollment failed. Exiting script." >&2
@@ -446,7 +543,7 @@ configure_rle_database_proxy(){
     fi
 
     # Enroll Tenant-2
-    rle_tenant2_payload=$(get_tenant_payload "Rle-Tenant-2" "T-2002" "$aws_kms_id" "$kek2_id" "T-rle-2002-dek")
+    rle_tenant2_payload=$(get_tenant_payload "Rle-Tenant-2" "T-2002" "$aws_kms_id" "$kek1_id" "T-rle-2002-dek")
     rle_tenant2_id=$(send_post_request "$jwt_token" "$tenant_url" "$rle_tenant2_payload" "id")
     if [ "$rle_tenant2_id" == "error" ]; then
       echo "Tenant-2 enrollment failed. Exiting script." >&2
@@ -495,7 +592,7 @@ configure_rle_database_proxy(){
      echo "Deployment failed. Exiting script." >&2
      exit 1
    else
-     echo "Deployment ID: deploy_id" >&2
+     echo "Deployment ID: $deploy_id" >&2
    fi
 
 
@@ -576,6 +673,7 @@ configure_bm(){
   else
     echo "DEK ID: $dek_id" >&2
   fi
+
   # write  if condition for workflows RLE
   if [ "$execute_workflow" == "BYOK" ]; then
     # Enroll KEK-1
@@ -587,6 +685,34 @@ configure_bm(){
       else
         echo "KEK-1 ID: $kek1_id" >&2
       fi
+  fi
+
+  # api service permission
+  all_permission=$(get_permission_payload "encrypt-decrypt" "encrypt-decrypt" '["ENCRYPT","DECRYPT"]')
+  all_permission_id=$(send_post_request "$jwt_token" "$permission_url" "$all_permission" "id")
+  if [ "$all_permission_id" == "error" ]; then
+    echo "All Permission failed. Exiting script." >&2
+    exit 1
+  else
+    echo "All Permission: $all_permission_id" >&2
+  fi
+
+  encrypt_permission=$(get_permission_payload "encrypt-only" "encrypt" '["ENCRYPT"]')
+  encrypt_permission_id=$(send_post_request "$jwt_token" "$permission_url" "$encrypt_permission" "id")
+  if [ "$encrypt_permission_id" == "error" ]; then
+    echo "Encrypt Permission failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Encrypt Permission: $encrypt_permission_id" >&2
+  fi
+
+  decrypt_permission=$(get_permission_payload "decrypt-only" "decrypt" '["DECRYPT"]')
+  decrypt_permission_id=$(send_post_request "$jwt_token" "$permission_url" "$decrypt_permission" "id")
+  if [ "$decrypt_permission_id" == "error" ]; then
+    echo "Decrypt Permission failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Decrypt Permission: $decrypt_permission_id" >&2
   fi
 }
 
