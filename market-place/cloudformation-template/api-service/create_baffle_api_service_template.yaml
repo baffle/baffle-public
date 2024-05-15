@@ -48,7 +48,7 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-015d949c0f466fd2b
+      AMI: ami-0a2b931d6212290c5
     us-east-2:
       AMI: ami-015d949c0f466fd2b
     us-west-1:
@@ -312,8 +312,12 @@ Resources:
           ToPort: 443
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
         - IpProtocol: tcp
-          FromPort: 8443
-          ToPort: 8443
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !GetAtt BaffleVPC.CidrBlock
+        - IpProtocol: tcp
+          FromPort: 8444
+          ToPort: 8444
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
       SecurityGroupEgress:
         - Description: Allow all outbound traffic to user

@@ -12,9 +12,6 @@ kek_name_1=$KM_KEK_NAME_1
 kek_name_2=$KM_KEK_NAME_2
 
 execute_workflow=$EXECUTE_WORKFLOW
-
-jwt_key="qwertyuiopasdfghjklzxcvbnm12345689789qwertyuiop"
-
 # Base URL
 base_url="https://localhost:443"
 
@@ -27,12 +24,7 @@ aws_kms_url="$base_url/api/v2/keystores/awskms"
 kek_url="$base_url/api/v2/key-management/keks"
 dpp_url="$base_url/api/v2/dpp"
 tenant_url="$base_url/api/v2/key-management/tenants"
-permission_url="$base_url/api/v3/api-svc/permissions"
 api_service_url="$base_url/api/v3/api-svc/clusters"
-api_service__ff_test_url="$base_url/api/v3/api-svc/clusters?ff_test=1"
-
-api_service_image=baffle-api-service:Release-Baffle.2.8.4.4
-controller_image=baffle-controller-service:Release-Baffle.2.8.4.4
 
 # Function to send a GET request and process the response
 send_get_request() {
@@ -217,72 +209,14 @@ get_tenant_payload(){
   echo "$tenant_payload"
 }
 
-# Get api service permission payload
-get_api_svc_permission_payload(){
-  api_svc_permission_payload=$(jq -n \
-                        --arg name "$1" \
-                        --arg role "$2" \
-                        --arg permission "$3" \
-                        '{
-                          "name": $name,
-                          "roles": [
-                            $role
-                          ],
-                          "permissions": [
-                              $permission
-                            ]
-                        }')
-
-  echo "$api_svc_permission"
-}
-
 # Get DB Proxy payload
 get_api_svc_cle_payload(){
   api_svc_cle_payload=$(jq -n \
                         --arg name "$1" \
                         --arg aws_kms_id "$2" \
                         --arg kek_id "$3" \
-                        --arg secret_key "4" \
                         '{
-
-                          "keystore": {
-                            "id": $aws_kms_id
-                          },
-                          "kek": {
-                            "id": $kek_id
-                          },
-                          "encryption": true
-
                           "name": $name,
-                          "jwtAuth": {
-                            "name": $name,
-                            "jwtEnable": true,
-                            "jwtAuthConfig": {
-                              "claims": [
-                                {
-                                  "key": "aud",
-                                  "values": "bafapi.baffle.io"
-                                },
-                                {
-                                  "key": "sub",
-                                  "values": "admin@baffle.io"
-                                },
-                                {
-                                  "key": "iss",
-                                  "values": "https://bafapi.baffle.io"
-                                },
-                              ],
-                              "auditLog": {
-                                "logAllAccess": true,
-                                "property": [
-                                  "aud",
-                                  "roles",
-                                  "iat"
-                                ]
-                              }
-                            },
-                            "secretKey": $secret_key
-                          },
                           "global": true,
                           "multiTenancy": false,
                           "globalEnc": {
@@ -393,49 +327,10 @@ get_login_payload(){
 
 
 start_api_service(){
-  access_syncId=$1
-  folder_path=$2
-  service_name=$3
-  port=$4
-  txn_logger_port=$5
-  # create folder if it doesn't exist
-  mkdir -p /home/ec2-user/"$folder_path"
-  # create docker-compose.yml file
- printf '
-version: "3.2"
-services:
- %s:
-   image: "%s"
-   ports:
-     - "%s:%s"
-   environment:
-     - BS_SYNC=BM4
-     - BM_DB_PROXY_SYNC_ID=%s
-     - BM_IP=nginx
-     - BM_PORT=8443
-     - BS_SSL=false
-     - BS_SSL_KEYSTORE_PASSWORD=keystore
-     - BS_SSL_TRUSTSTORE_PASSWORD=keystore
-     - BS_SSL_TLS_VERSION=TLSv1.2
-   networks:
-     - baffle_network-frontend
-   restart: always
-   depends_on:
-     - txn-logger
- txn-logger:
-   image: "%s"
-   ports:
-     - "%s:%s"
-   networks:
-     - baffle_network-frontend
-networks:
- baffle_network-frontend:
-   external: true
- ' "$service_name" "$postgres_shield_image" "$port" "$port" "$access_syncId" "$txn_logger_image" "$txn_logger_port" "$txn_logger_port" > /home/ec2-user/"$folder_path"/docker-compose.yml
+  port=8444
+  cd /home/ec2-user/baffle-api-service
 
-  cd /home/ec2-user/"$folder_path"
-
-  echo "Starting Postgres Proxy Service..." >&2
+  echo "Starting API  Service..." >&2
   # Run docker compose
   docker-compose up -d &
 
@@ -448,7 +343,7 @@ networks:
   done
 
   if netstat -tuln | grep "$port"; then
-    echo "Port $port is open. Postgres Proxy Service is up and running." >&2
+    echo "Port $port is open. API Service is up and running." >&2
     echo "success"
   elif [ $counter -eq 10 ]; then
     echo "Port $port is not open after 5 minutes. Exiting script." >&2
@@ -465,13 +360,36 @@ start_bm(){
 
 ################## Configuration for standard api service ##################
 configure_cle_api_service(){
-  echo -e "\n#### Configuring CLE APi Service... ####\n" >&2
+  echo -e "\n#### Configuring CLE API Service... ####\n" >&2
 
+  api_cle_payload=$(get_api_svc_cle_payload "cle-api-service" "$aws_kms_id" "$kek_id" )
+  # Enroll data source
+  read api_cle_id cle_syncId <<< $(send_post_request "$jwt_token" "$api_service_url" "$api_cle_payload" "id" "syncId")
+  if [ "$api_cle_id" == "error" ]; then
+    echo "API service enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "API Service cluster: $api_cle_id" >&2
+    echo "Sync ID: $cle_syncId" >&2
+    export "SERVICE_ID=$api_cle_id"
+    export "SYNC_ID=$cle_syncId"
+  fi
+
+  public_ip=$(curl https://checkip.amazonaws.com)
+  echo "Public IP: $public_ip" >&2
+  export "BM_URL=https://$public_ip"
+
+  # Start API Service
+  status=$(start_api_service)
+  if [ "$status" == "error" ]; then
+    echo "API Service startup failed. Exiting script."
+    exit 1
+  fi
 }
 
 ################## Configuration for RLE Database Proxy ##################
 configure_rle_database_proxy(){
-  echo -e "\n#### Configuring RLE Database Proxy... ####\n" >&2
+  echo -e "\n#### Configuring RLE API Service.... ####\n" >&2
 }
 
 ################## Main Workflow ##################
@@ -554,19 +472,6 @@ configure_bm(){
         echo "KEK-1 ID: $kek1_id" >&2
       fi
   fi
-
-  #create API service permission
-  admin_permission_payload=$(get_api_svc_permission_payload "admin-role" "admin" "ALLOW_ALL")
-  admin_permission_id=$(send_post_request "$jwt_token" "$kek_url" "$admin_permission_payload" "id")
-
-  encrypt_permission_payload=$(get_api_svc_permission_payload "encrypt-role" "encrypt" "ENCRYPT")
-  encrypt_permission_id=$(send_post_request "$jwt_token" "$kek_url" "$encrypt_permission_payload" "id")
-
-  decrypt_permission_payload=$(get_api_svc_permission_payload "decrypt-role" "decrypt" "DECRYPT")
-  decrypt_permission_id=$(send_post_request "$jwt_token" "$kek_url" "$decrypt_permission_payload" "id")
-
-  #set ff_test
-  send_get_request "$jwt_token" "$api_service__ff_test_url"
 }
 
 # Execute workflow based on execute_workflow variable.
