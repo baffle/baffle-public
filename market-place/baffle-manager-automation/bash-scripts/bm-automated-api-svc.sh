@@ -209,7 +209,7 @@ get_tenant_payload(){
   echo "$tenant_payload"
 }
 
-# Get DB Proxy payload
+# Get cle api payload
 get_api_svc_cle_payload(){
   api_svc_cle_payload=$(jq -n \
                         --arg name "$1" \
@@ -230,6 +230,19 @@ get_api_svc_cle_payload(){
                         }')
 
   echo "$api_svc_cle_payload"
+}
+
+# Get rle api payload
+get_api_svc_rle_payload(){
+  api_svc_rle_payload=$(jq -n \
+                        --arg name "$1" \
+                        '{
+                          "name": $name,
+                          "global": false,
+                          "multiTenancy": true,
+                        }')
+
+  echo "$api_svc_rle_payload"
 }
 
 # get Deployment payload
@@ -328,6 +341,12 @@ get_login_payload(){
 
 start_api_service(){
   port=8444
+
+  aws_metadata_token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+  private_ip=$(curl -H "X-aws-ec2-metadata-token: $aws_metadata_token" http://169.254.169.254/latest/meta-data/local-ipv4)
+  echo "Private IP: $private_ip" >&2
+  export "BM_URL=https://$private_ip"
+
   cd /home/ec2-user/baffle-api-service
 
   echo "Starting API  Service..." >&2
@@ -358,12 +377,41 @@ start_bm(){
   docker-compose up -d &
 }
 
+# Get Tenant api  enroll payload
+get_tenant_enroll_payload(){
+  tenant_id=$1
+
+  tenant_payload=$(jq -n \
+                --arg tenant_id "tenant_id" \
+                '{
+                  "tenantKey": {
+                     "id": $tenant_id
+                  },
+                  "permissions":[]
+                }')
+
+  echo "$tenant_payload"
+}
+
+# Get deploy payload
+get_deploy_payload(){
+  name=$1
+
+  deploy_payload=$(jq -n \
+                --arg name "name" \
+                '{
+                  "name" : $name
+                }')
+
+  echo "$deploy_payload"
+}
+
 ################## Configuration for standard api service ##################
 configure_cle_api_service(){
   echo -e "\n#### Configuring CLE API Service... ####\n" >&2
 
   api_cle_payload=$(get_api_svc_cle_payload "cle-api-service" "$aws_kms_id" "$kek_id" )
-  # Enroll data source
+  # Enroll api service
   read api_cle_id cle_syncId <<< $(send_post_request "$jwt_token" "$api_service_url" "$api_cle_payload" "id" "syncId")
   if [ "$api_cle_id" == "error" ]; then
     echo "API service enrollment failed. Exiting script." >&2
@@ -374,11 +422,6 @@ configure_cle_api_service(){
     export "SERVICE_ID=$api_cle_id"
     export "SYNC_ID=$cle_syncId"
   fi
-
-  aws_metadata_token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-  private_ip=$(curl -H "X-aws-ec2-metadata-token: $aws_metadata_token" http://169.254.169.254/latest/meta-data/local-ipv4)
-  echo "Private IP: $private_ip" >&2
-  export "BM_URL=https://$private_ip"
 
   # Start API Service
   status=$(start_api_service)
@@ -391,6 +434,78 @@ configure_cle_api_service(){
 ################## Configuration for RLE Database Proxy ##################
 configure_rle_database_proxy(){
   echo -e "\n#### Configuring RLE API Service.... ####\n" >&2
+
+   # Enroll Tenant-1
+    rle_tenant1_payload=$(get_tenant_payload "Rle-Tenant-1" "T-1001" "$aws_kms_id" "$kek1_id" "T-rle-1001-dek")
+    rle_tenant1_id=$(send_post_request "$jwt_token" "$tenant_url" "$rle_tenant1_payload" "id")
+    if [ "$rle_tenant1_id" == "error" ]; then
+      echo "RLE Tenant-1 enrollment failed. Exiting script." >&2
+      exit 1
+    else
+      echo "RLE Tenant-1 ID: $rle_tenant1_id" >&2
+    fi
+
+    # Enroll Tenant-2
+    rle_tenant2_payload=$(get_tenant_payload "Rle-Tenant-2" "T-2002" "$aws_kms_id" "$kek2_id" "T-rle-2002-dek")
+    rle_tenant2_id=$(send_post_request "$jwt_token" "$tenant_url" "$rle_tenant2_payload" "id")
+    if [ "$rle_tenant2_id" == "error" ]; then
+      echo "Tenant-2 enrollment failed. Exiting script." >&2
+      exit 1
+    else
+      echo "Tenant-2 ID: $rle_tenant2_id" >&2
+    fi
+
+  api_rle_payload=$(get_api_svc_rle_payload "rle-api-service" )
+  # Enroll api service
+  read api_rle_id rle_syncId <<< $(send_post_request "$jwt_token" "$api_service_url" "$api_rle_payload" "id" "syncId")
+  if [ "$api_rle_id" == "error" ]; then
+    echo "API service enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "API Service cluster: $api_rle_id" >&2
+    echo "Sync ID: $rle_syncId" >&2
+    export "SERVICE_ID=$api_rle_id"
+    export "SYNC_ID=$rle_syncId"
+  fi
+
+
+   # add tenant to api
+   add_tenant_1=$(get_tenant_enroll_payload "$rle_tenant1_id")
+   add_tenant_1_id=$(send_post_request "$jwt_token" "$api_service_url/$api_rle_id/tenants" "$add_tenant_1" "id")
+   if [ "add_tenant_1_id" == "error" ]; then
+     echo "Tenant Add failed. Exiting script." >&2
+     exit 1
+   else
+     echo "Tenant Add ID: $add_tenant_1_id" >&2
+   fi
+
+   add_tenant_2=$(get_tenant_enroll_payload "$rle_tenant2_id")
+   add_tenant_2_id=$(send_post_request "$jwt_token" "$api_service_url/$api_rle_id/tenants" "$add_tenant_2" "id")
+   if [ "add_tenant_2_id" == "error" ]; then
+     echo "Tenant Add failed. Exiting script." >&2
+     exit 1
+   else
+     echo "Tenant Add ID: $add_tenant_2_id" >&2
+   fi
+
+
+   deploy_payload=$(get_deploy_payload "deploy-rle")
+   deploy_id=$(send_post_request "$jwt_token" "$api_service_url/$api_rle_id/deployments" "$deploy_payload" "id")
+   if [ "deploy_id" == "error" ]; then
+     echo "Deployment failed. Exiting script." >&2
+     exit 1
+   else
+     echo "Deployment ID: deploy_id" >&2
+   fi
+
+
+  # Start API Service
+    status=$(start_api_service)
+    if [ "$status" == "error" ]; then
+      echo "API Service startup failed. Exiting script."
+      exit 1
+    fi
+
 }
 
 ################## Main Workflow ##################
