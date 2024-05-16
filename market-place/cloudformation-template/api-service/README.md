@@ -189,3 +189,10 @@ curl -k --location 'https://{hostname}:8444/api/v3/fpe-decrypt/string?tenant=T-2
     ]
 }'
 ```
+
+
+### 3. Swagger:
+
+The Swagger UI can be found at 
+``
+https://{hostname}:8444/swagger-ui/index.html``
