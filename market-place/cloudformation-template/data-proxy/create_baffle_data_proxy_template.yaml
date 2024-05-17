@@ -1,14 +1,18 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Create a resources needed for Baffle Data Protection for Databases"
+Description: "Create a resources needed for Baffle Data Protection for Data Proxy"
 
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-            default: "Baffle Data Protection for API Workflow"
+            default: "Baffle Data Protection for Data Proxy Workflow"
         Parameters:
           - Workflow
+      - Label:
+          default: "Name of S3 Bucket to be protected"
+        Parameters:
+          - S3BucketName
       - Label:
           default: "Baffle Manager credential"
         Parameters:
@@ -26,6 +30,10 @@ Parameters:
     AllowedValues:
       - "Standard"
       - "BYOK"
+
+  S3BucketName:
+    Description: "Name of S3 Bucket to be protected"
+    Type: String
 
   UserEmail:
     Description: "Email for Baffle Manage and PGAdmin UI user"
@@ -212,6 +220,15 @@ Resources:
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
+        - PolicyName: DataBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "s3:*"
+                Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref S3BucketName ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref S3BucketName, "/*" ] ]
 
   BaffleShield1Key:
     Type: "AWS::KMS::Key"
@@ -370,13 +387,15 @@ Resources:
             echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
             echo "export KM_KEK_NAME_1='${BaffleShield2KeyAlias}'" >> /etc/environment
             echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+            echo "export DATA_S3_BUCKET_NAME='${S3BucketName}'" >> /etc/environment
+            echo "export STACK_NAME='${AWS::StackName}'" >> /etc/environment
             source /etc/environment
             # Setup docker
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
-            wget https://raw.githubusercontent.com/baffle/baffle-public/main/market-place/baffle-manager-automation/bash-scripts/bm-automated-api-svc.sh
-            chmod +x bm-automated-api-svc.sh >> output.txt 2>&1
-            sudo ./bm-automated-api-svc.sh >> output.txt 2>&1
+            wget https://raw.githubusercontent.com/baffle/baffle-public/main/market-place/baffle-manager-automation/bash-scripts/bm-automated-data-proxy.sh
+            chmod +x bm-automated-data-proxy.sh >> output.txt 2>&1
+            sudo ./bm-automated-data-proxy.sh >> output.txt 2>&1
         - Fn::Base64: !Sub |
             #!/bin/bash
             echo "export USERNAME='${UserEmail}'" >> /etc/environment
@@ -385,13 +404,15 @@ Resources:
             echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
             echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
             echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+            echo "export DATA_S3_BUCKET_NAME='${S3BucketName}'" >> /etc/environment
+            echo "export STACK_NAME='${AWS::StackName}'" >> /etc/environment
             source /etc/environment
             # Setup docker
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
-            wget https://raw.githubusercontent.com/baffle/baffle-public/main/market-place/baffle-manager-automation/bash-scripts/bm-automated-api-svc.sh
-            chmod +x bm-automated-api-svc.sh >> output.txt 2>&1
-            sudo ./bm-automated-api-svc.sh >> output.txt 2>&1
+            wget https://raw.githubusercontent.com/baffle/baffle-public/main/market-place/baffle-manager-automation/bash-scripts/bm-automated-data-proxy.sh
+            chmod +x bm-automated-data-proxy.sh >> output.txt 2>&1
+            sudo ./bm-automated-data-proxy.sh >> output.txt 2>&1
 Outputs:
 
   StackRegion:
@@ -407,9 +428,9 @@ Outputs:
     Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName ] ]
 
   APIServiceURL:
-    Description: "The URL for API Service"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444" ] ]
+    Description: "The URL for Data Proxy"
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8000" ] ]
 
   APIServiceHealthCheck:
-    Description: "The health check URL for API Service"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444", "/api/service/status" ] ]
+    Description: "The health check URL for Data Proxy"
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8000", "/api/service/status" ] ]
