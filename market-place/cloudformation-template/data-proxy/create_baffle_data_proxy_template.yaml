@@ -393,7 +393,7 @@ Resources:
             # Setup docker
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
-            wget https://raw.githubusercontent.com/baffle/baffle-public/main/market-place/baffle-manager-automation/bash-scripts/bm-automated-data-proxy.sh
+            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/bm-automated-data-proxy.sh
             chmod +x bm-automated-data-proxy.sh >> output.txt 2>&1
             sudo ./bm-automated-data-proxy.sh >> output.txt 2>&1
         - Fn::Base64: !Sub |
@@ -410,7 +410,7 @@ Resources:
             # Setup docker
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
-            wget https://raw.githubusercontent.com/baffle/baffle-public/main/market-place/baffle-manager-automation/bash-scripts/bm-automated-data-proxy.sh
+            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/bm-automated-data-proxy.sh
             chmod +x bm-automated-data-proxy.sh >> output.txt 2>&1
             sudo ./bm-automated-data-proxy.sh >> output.txt 2>&1
 Outputs:
