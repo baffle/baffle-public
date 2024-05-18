@@ -6,7 +6,7 @@ password=$PASSWORD
 #Keystore info
 aws_region=$KM_AWS_REGION
 s3_bucket_name=$KM_S3_BUCKET_NAME
-stack_name="dp-$STACK_NAME"
+stack_name=$STACK_NAME
 
 # Kek info
 kek_name=$KM_KEK_NAME
@@ -16,7 +16,7 @@ execute_workflow=$EXECUTE_WORKFLOW
 # Base URL
 base_url="https://localhost:443"
 
-# Login API URL
+# Login Data Proxy URL
 checkAppUrl="$base_url/api/public/v2/application_access_check"
 registration_url="$base_url/api/public/v2/init"
 login_url="$base_url/api/public/v2/auth"
@@ -25,7 +25,6 @@ aws_kms_url="$base_url/api/v2/keystores/awskms"
 kek_url="$base_url/api/v2/key-management/keks"
 tenant_url="$base_url/api/v2/key-management/tenants"
 data_proxy_url="$base_url/api/v3/data-proxy/clusters"
-permission_url="$base_url/api/v3/api-svc/permissions"
 enc_policy_url="$base_url/api/v3/enc-policies"
 access_group_url="$base_url/api/v3/data-proxy/access-groups"
 data_source_url="$base_url/api/v3/data-proxy/data-sources"
@@ -573,13 +572,14 @@ get_deploy_payload(){
 
 # Get cle dp payload
 get_dp_cle_payload(){
+  region=$(get_region)
   dp_cle_payload=$(jq -n \
                  --arg name "$1" \
                  --arg region "$region" \
                  --arg bucket "$s3_bucket_name" \
                  --arg stack_name "$stack_name" \
                  --arg keystore "$2" \
-                 --arg ked "$3" \
+                 --arg kek "$3" \
                  '{
                    "name": $name,
                    "server": {
@@ -729,29 +729,29 @@ get_registration_payload(){
   echo "$registration_payload"
 }
 
-# Function to check if the BM REST API service is up and running
+# Function to check if the BM Data Proxy service is up and running
 check_application(){
   # Counter for the number of retries
   counter=0
   while [ $counter -lt 10 ]; do
-    # Send a request to the REST API endpoint and store the HTTP status code
+    # Send a request to the Data Proxy endpoint and store the HTTP status code
     ssn_status_code=$(curl -k --write-out "%{http_code}\n" --silent --output /dev/null "$checkAppUrl")
     # If the HTTP status code is 200, print a success message and exit the loop
     if [ "$ssn_status_code" -eq 200 ]; then
-      echo "BM REST API service is up and running."
+      echo "BM Data Proxy is up and running."
       break
     fi
     # If the HTTP status code is not 200, print a retry message and wait for the specified time interval before the next retry
-    echo "BM REST API service is not responding. Retrying in 30 seconds..." >&2
+    echo "BM Data Proxy  is not responding. Retrying in 30 seconds..." >&2
     sleep 30
     ((counter++))
   done
   # If the maximum number of retries has been reached, print an error message
   if [ $counter -eq 10 ]; then
-    echo "BM REST API service is not responding after 5 minutes. Exiting script." >&2
+    echo "BM Data Proxy  is not responding after 5 minutes. Exiting script." >&2
     echo "error"
   else
-    echo "BM REST API service is up and running."
+    echo "BM Data Proxy  is up and running."
     echo "success"
   fi
 }
@@ -802,7 +802,7 @@ start_data_proxy(){
   done
 
   if netstat -tuln | grep "$port"; then
-    echo "Port $port is open. API Service is up and running." >&2
+    echo "Port $port is open. Data Proxy  is up and running." >&2
     echo "success"
   elif [ $counter -eq 10 ]; then
     echo "Port $port is not open after 5 minutes. Exiting script." >&2
@@ -850,7 +850,7 @@ configure_cle_data_proxy(){
   fi
 
 
-  dp_cle_payload=$(get_dp_cle_payload "cle-dp-proxy" )
+  dp_cle_payload=$(get_dp_cle_payload "cle-dp-proxy" "$aws_kms_id" "$kek_id" )
   # Enroll api service
   read dp_cle_id cle_syncId <<< $(send_post_request "$jwt_token" "$data_proxy_url" "$dp_cle_payload" "id" "syncId")
   if [ "$dp_cle_id" == "error" ]; then
@@ -895,7 +895,7 @@ configure_rle_data_proxy(){
       echo "Adding AES RANDOM  failed. Exiting script." >&2
       exit 1
     else
-      echo "AES RANDOM added : $aes_random_policy_id=" >&2
+      echo "AES RANDOM added : $aes_random_policy_id" >&2
     fi
 
     # Enroll Tenant-1
@@ -1054,10 +1054,10 @@ configure_bm(){
   ################## Configuration for Baffle Manager ##################
   echo -e "\n#### Configuring Baffle Manager... ####\n" >&2
   start_bm
-  # Check if the BM REST API service is up and running
+  # Check if the BM Data Proxy is up and running
   status=$(check_application)
   if [ "$status" == "error" ]; then
-    echo "BM REST API service is not responding. Exiting script." >&2
+    echo "BM Data Proxy  is not responding. Exiting script." >&2
     exit 1
   fi
 

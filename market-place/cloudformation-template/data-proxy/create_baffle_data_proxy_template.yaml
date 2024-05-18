@@ -429,8 +429,8 @@ Outputs:
 
   APIServiceURL:
     Description: "The URL for Data Proxy"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8000" ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444" ] ]
 
   APIServiceHealthCheck:
     Description: "The health check URL for Data Proxy"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8000", "/api/service/status" ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444", "/dataproxy/status" ] ]
