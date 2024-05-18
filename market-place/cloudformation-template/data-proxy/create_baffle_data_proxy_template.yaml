@@ -56,7 +56,7 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-04cab462d24770d31
+      AMI: ami-03e2409d7bf3d656f
     us-east-2:
       AMI: ami-015d949c0f466fd2b
     us-west-1:
