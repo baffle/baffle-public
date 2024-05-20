@@ -5,6 +5,10 @@ Description: "Create a resources needed for Baffle Data Protection for Databases
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
+      - Label:
+          default: "Instance type for EC2 and RDS"
+        Parameters:
+          - InstanceType
       -
         Label:
           default: "Baffle Data Protection for Databases Workflow"
@@ -27,8 +31,32 @@ Metadata:
         Parameters:
           - MyIP
 
-
 Parameters:
+  InstanceType:
+    Description: "Select instance type"
+    Type: String
+    Default: "r6i.large"
+    AllowedValues:
+      - "r6i.large"
+      - "r6i.xlarge"
+      - "r6i.2xlarge"
+      - "r6i.4xlarge"
+      - "r6i.8xlarge"
+      - "r6i.12xlarge"
+      - "r6i.16xlarge"
+      - "r6i.24xlarge"
+      - "r6i.32xlarge"
+      - "r6g.large"
+      - "r6g.xlarge"
+      - "r6g.2xlarge"
+      - "r6g.4xlarge"
+      - "r6g.8xlarge"
+      - "r6g.12xlarge"
+      - "r6g.16xlarge"
+      - "r5.12xlarge"
+      - "r5.16xlarge"
+      - "r5.24xlarge"
+
   Workflow:
     Description: "Select workflow to create required resources"
     Type: String
@@ -314,7 +342,7 @@ Resources:
     Properties:
       DBParameterGroupName: !Ref DBParameterGroup
       AllocatedStorage: "20"
-      DBInstanceClass: "db.t3.micro"
+      DBInstanceClass: !Join [ "", [ "db.", !Ref InstanceType ] ]
       Engine: "postgres"
       EngineVersion: "15.6"
       MasterUsername:
@@ -568,7 +596,7 @@ Resources:
     Properties:
       IamInstanceProfile: !Ref BaffleShieldInstanceProfile
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-      InstanceType: t2.large
+      InstanceType: !Ref InstanceType
       KeyName: !Ref BaffleKeyPair
       NetworkInterfaces:
         - DeviceIndex: 0
@@ -633,7 +661,7 @@ Resources:
     DependsOn: BaffleEC2Instance
     Properties:
       ReplicationInstanceIdentifier: !Join [ "-", [ !Ref "AWS::StackName", "replication-instance" ] ]
-      ReplicationInstanceClass: "dms.t3.small"
+      ReplicationInstanceClass:  !Join [ "", [ "dms.", !Ref InstanceType ] ]
       AllocatedStorage: 20
       VpcSecurityGroupIds:
         - !GetAtt BaffleEC2SecurityGroup.GroupId
