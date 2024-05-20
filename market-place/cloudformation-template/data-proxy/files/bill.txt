@@ -1,0 +1,24 @@
+Bill for Data Proxy Services
+Invoice Number: DP-001
+Date: 2024-05-17
+Billing Information:
+Company Name: Baffle, Inc.
+Address: 123 Main St, Anytown, USA
+Contact: John Doe (johndoe@baffle.io)
+Services:
+Data Proxy: $100.00/month
+Usage: 30 days
+Total: $100.00
+Additional Fees:
+Overage charges: $20.00
+Support services: $50.00
+Total additional fees: $70.00
+Subtotal: $170.00
+Tax (10%): $17.00
+Total: $187.00
+Payment Information:
+Payment Method: Credit Card
+Payment Date: Due upon receipt
+Please make payments to:
+Baffle, Inc.
+123 Main St, Anytown, USA

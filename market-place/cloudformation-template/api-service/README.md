@@ -16,7 +16,7 @@ This project contains a Cloudformation Template for setting up a Baffle Shield  
 * UserPassword: Password to log into Baffle Manager and Pg Admin UI
 * Workflow: Standard ot BYOK
 
-`aws cloudformation create-stack --stack-name api-cle --template-body file://create_baffle_api_service_template.yaml --capabilities CAPABILITY_NAMED_IAM --parameters ParameterKey=MyIP,ParameterValue=$(curl -s http://checkip.amazonaws.com/) ParameterKey=WorkflowParameterValue=Standard ParameterKey=UserEmail,ParameterValue=admin@baffle.io ParameterKey=UserPassword,ParameterValue=Baffle-2024`
+`aws cloudformation create-stack --stack-name api-cle --template-body file://create_baffle_api_service_template.yaml --capabilities CAPABILITY_NAMED_IAM --parameters ParameterKey=MyIP,ParameterValue=$(curl -s http://checkip.amazonaws.com/) ParameterKey=Workflow,ParameterValue=Standard ParameterKey=UserEmail,ParameterValue=admin@baffle.io ParameterKey=UserPassword,ParameterValue=Baffle-2024`
 
 Once the template creates the stack it will output some value. The following are important
 1. BaffleEC2SecurityGroup -  The Security Group that white list user IP
@@ -41,7 +41,8 @@ https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/create-key-pairs.html#create
 
 ## 2. Testing the Baffle API
 
-Once the API creation is up.
+Once the API creation is up. Please log into Baffle Manager, check the API cluster instance tab and check config are sync.
+
 Please use the curl command to check the status (update the hostname with your host )
 
 `curl -k https://{hostname}:8444/api/service/status`

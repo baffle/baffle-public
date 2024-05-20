@@ -6,7 +6,6 @@ password=$PASSWORD
 #Keystore info
 aws_region=$KM_AWS_REGION
 s3_bucket_name=$KM_S3_BUCKET_NAME
-stack_name=$STACK_NAME
 
 # Kek info
 kek_name=$KM_KEK_NAME
@@ -577,7 +576,6 @@ get_dp_cle_payload(){
                  --arg name "$1" \
                  --arg region "$region" \
                  --arg bucket "$s3_bucket_name" \
-                 --arg stack_name "$stack_name" \
                  --arg keystore "$2" \
                  --arg kek "$3" \
                  '{
@@ -587,8 +585,7 @@ get_dp_cle_payload(){
                      "checkServerConnections":false,
                      "s3Config": {
                        "region": $region,
-                       "bucket": $bucket,
-                       "folderPath": $stack_name
+                       "bucket": $bucket
                      }
                    },
                    "client": {
@@ -658,8 +655,7 @@ get_dp_rle_payload(){
                             "checkServerConnections":false,
                             "s3Config": {
                               "region": $region,
-                              "bucket": $bucket,
-                              "folderPath": $stack_name
+                              "bucket": $bucket
                             }
                           },
                           "client": {
@@ -701,7 +697,7 @@ get_dp_rle_payload(){
                           },
                           "encryption": {
                             "type":"MULTI_TENANCY",
-                            "tenantDetermination":"QUERY_PARAM"
+                            "tenantDetermination":"HEADER"
                           },
                           "accessControl":{
                             "accessControlMethod":"ROLE"
