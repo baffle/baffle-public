@@ -65,25 +65,25 @@ Since, the JWT is configured. Below are 3 tokens that will be helpful
 1. Upload with encrypt role -> success
 ```bash
 curl -i -k  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTIxLjA2ODYyMywiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdCJdfQ.77aDWccA7ReGXN5xTnK6Ogk0MBwZ8AuKnGc8NyufTws' \
---upload-file bill.txt 'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/write/bill.txt'
+--upload-file bill.txt 'https://{hostname}:8444/api/filesvc/write/bill.txt'
 ```
 
 2. Upload with decrypt role -> error
 ```bash
 curl -i -k  -H 'Authorization:Bearer Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
---upload-file bill.txt 'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/write/bill.txt'
+--upload-file bill.txt 'https://{hostname}:8444/api/filesvc/write/bill.txt'
 ```
 
 3. Download with decrypt role -> success
 ```bash
 curl -s -k  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
-'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
+'https://{hostname}:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
 ```
 
 4. Decrypt with encrypt-decrypt role -> success
 ```bash
 curl -s -k  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE0MTYwLjY5ODQ1NiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdC1kZWNyeXB0Il19.WvO027v6qbIh26berMrtVd9bGsbEpcxteEt5Vryic0c' \
-'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
+'https://{hostname}:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
 ```
 
 #### Field level file
@@ -91,25 +91,25 @@ curl -s -k  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3
 1. Upload with encrypt role -> success
 ```bash
 curl -i -k  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTIxLjA2ODYyMywiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdCJdfQ.77aDWccA7ReGXN5xTnK6Ogk0MBwZ8AuKnGc8NyufTws' \
---upload-file employee.csv 'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/write/employee.csv'
+--upload-file employee.csv 'https://{hostname}:8444/api/filesvc/write/employee.csv'
 ```
 
 2. Upload with decrypt role -> error
 ```bash
 curl -i -k  -H 'Authorization:Bearer Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
---upload-file employee.csv 'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/write/employee.csv'
+--upload-file employee.csv 'https://{hostname}:8444/api/filesvc/write/employee.csv'
 ```
 
 3. Download with decrypt role -> success
 ```bash
 curl -s -k  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
-'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
+'https://{hostname}:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
 ```
 
 4. Decrypt with encrypt-decrypt role -> success
 ```bash
 curl -s -k  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE0MTYwLjY5ODQ1NiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdC1kZWNyeXB0Il19.WvO027v6qbIh26berMrtVd9bGsbEpcxteEt5Vryic0c' \
-'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
+'https://{hostname}:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
 ```
 
 
@@ -120,25 +120,25 @@ curl -s -k  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3
 1. Upload with encrypt role -> success
 ```bash
 curl -i -k  -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTIxLjA2ODYyMywiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdCJdfQ.77aDWccA7ReGXN5xTnK6Ogk0MBwZ8AuKnGc8NyufTws' \
---upload-file bill.txt 'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/write/bill.txt'
+--upload-file bill.txt 'https://{hostname}:8444/api/filesvc/write/bill.txt'
 ```
 
 2. Upload with decrypt role -> error
 ```bash
 curl -i -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
---upload-file bill.txt 'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/write/bill.txt'
+--upload-file bill.txt 'https://{hostname}:8444/api/filesvc/write/bill.txt'
 ```
 
 3. Download with decrypt role -> success
 ```bash
 curl -s -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
-'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
+'https://{hostname}:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
 ```
 
 4. Decrypt with encrypt-decrypt role -> success
 ```bash
 curl -s -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE0MTYwLjY5ODQ1NiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdC1kZWNyeXB0Il19.WvO027v6qbIh26berMrtVd9bGsbEpcxteEt5Vryic0c' \
-'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
+'https://{hostname}:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
 ```
 
 #### Field level file
@@ -146,25 +146,25 @@ curl -s -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI
 1. Upload with encrypt role -> success
 ```bash
 curl -i -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTIxLjA2ODYyMywiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdCJdfQ.77aDWccA7ReGXN5xTnK6Ogk0MBwZ8AuKnGc8NyufTws' \
---upload-file employee.csv 'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/write/employee.csv'
+--upload-file employee.csv 'https://{hostname}:8444/api/filesvc/write/employee.csv'
 ```
 
 2. Upload with decrypt role -> error
 ```bash
 curl -i -k  -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
---upload-file employee.csv 'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/write/employee.csv'
+--upload-file employee.csv 'https://{hostname}:8444/api/filesvc/write/employee.csv'
 ```
 
 3. Download with decrypt role -> success
 ```bash
 curl -s -k -H 'x-baffle-tenant: T-1001'  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
-'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
+'https://{hostname}:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
 ```
 
 4. Decrypt with encrypt-decrypt role -> success
 ```bash
 curl -s -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE0MTYwLjY5ODQ1NiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdC1kZWNyeXB0Il19.WvO027v6qbIh26berMrtVd9bGsbEpcxteEt5Vryic0c' \
-'https://ec2-3-83-236-91.compute-1.amazonaws.com:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
+'https://{hostname}:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
 ```
 
 ### 3. Swagger:
