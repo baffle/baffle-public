@@ -35,27 +35,15 @@ Parameters:
   InstanceType:
     Description: "Select instance type"
     Type: String
-    Default: "r6i.large"
+    Default: "t3.large"
     AllowedValues:
-      - "r6i.large"
-      - "r6i.xlarge"
-      - "r6i.2xlarge"
-      - "r6i.4xlarge"
-      - "r6i.8xlarge"
-      - "r6i.12xlarge"
-      - "r6i.16xlarge"
-      - "r6i.24xlarge"
-      - "r6i.32xlarge"
-      - "r6g.large"
-      - "r6g.xlarge"
-      - "r6g.2xlarge"
-      - "r6g.4xlarge"
-      - "r6g.8xlarge"
-      - "r6g.12xlarge"
-      - "r6g.16xlarge"
-      - "r5.12xlarge"
-      - "r5.16xlarge"
-      - "r5.24xlarge"
+      - "t2.large"
+      - "t2.xlarge"
+      - "t3.large"
+      - "t3.xlarge"
+      - "m4.large"
+      - "m4.xlarge"
+
 
   Workflow:
     Description: "Select workflow to create required resources"
