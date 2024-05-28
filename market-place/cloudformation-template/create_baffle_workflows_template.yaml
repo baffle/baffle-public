@@ -37,12 +37,12 @@ Parameters:
     Type: String
     Default: "t3.large"
     AllowedValues:
-      - "t2.large"
-      - "t2.xlarge"
       - "t3.large"
       - "t3.xlarge"
-      - "m4.large"
-      - "m4.xlarge"
+      - "t4g.large"
+      - "t4g.xlarge"
+      - "m5.large"
+      - "m5.xlarge"
 
 
   Workflow:
@@ -59,11 +59,11 @@ Parameters:
       - "RQE_MIGRATION"
 
   UserEmail:
-    Description: "Email for Baffle Manage and PGAdmin UI user"
+    Description: "Email for Baffle Manager and PGAdmin UI user"
     Type: String
 
   UserPassword:
-    Description: "Password for Baffle Manage and PGAdmin UI user"
+    Description: "Password for Baffle Manager and PGAdmin UI user"
     Type: String
     NoEcho: true
 
