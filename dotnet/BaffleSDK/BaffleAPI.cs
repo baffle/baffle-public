@@ -119,9 +119,25 @@ public class BaffleAPI
         return "";
     }
 
+    public async Task<BulkFpeResponseData> FPEBulkOperation(bool decrypt, BulkFpeRequestData requestData)
+    {
+        var operation = decrypt ? "decrypt" : "encrypt";
+        var content = new StringContent(JsonConvert.SerializeObject(requestData, Formatting.Indented, new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }), Encoding.UTF8, "application/json");
+
+        HttpResponseMessage response = await _client.PostAsync($"{_hostUrl}/api/v3/fpe-{operation}/data", content);
+
+        if (response.IsSuccessStatusCode)
+        {
+            var jsonString = response.Content.ReadAsStringAsync().Result;
+            var root = JsonConvert.DeserializeObject<BulkFpeResponseData>(jsonString);
+            return root;
+        }
+        return null;
+    }
+
 }
 
-public class FpeDat
+public class FpeData
 {
     public string txt { get; set; }
     public int keyId { get; set; }
@@ -131,5 +147,46 @@ public class FpeDat
 
 public class Root
 {
-    public List<FpeDat> fpeData { get; set; }
+    public List<FpeData> fpeData { get; set; }
+}
+
+
+public class BulkFpeRequestData
+{
+    public List<BulkFpeItem> fpeItems { get; set; }
+}
+
+public class BulkFpeResponseData
+{
+    public List<FpeResponseData> fpeData { get; set; }
+}
+
+public class BulkFpeItem
+{
+    public int keyId { get; set; }
+    public string datatype { get; set; }
+    public string columnName { get; set; }
+    public List<BulkFpeData> fpeData { get; set; }
+}
+
+public class FpeResponseData
+{
+    public int keyId { get; set; }
+    public string datatype { get; set; }
+    public string columnName { get; set; }
+    public List<Data> data { get; set; }
+}
+
+public class BulkFpeData
+{
+    public string format { get; set; }
+    public List<Data> data { get; set; }
+}
+
+public class Data
+{
+
+    public int id { get; set; }
+    public string value { get; set; }
+    public string status { get; set; }
 }
