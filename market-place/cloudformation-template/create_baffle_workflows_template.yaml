@@ -601,7 +601,7 @@ Resources:
             echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
             echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
             echo "export DB_USER_NAME='baffle'" >> /etc/environment
-            echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+            echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\#/g')'" >> /etc/environment
             echo "export KM_AWS_REGION='${AWS::Region}'" >> /etc/environment
             echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
             echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
@@ -621,7 +621,7 @@ Resources:
             echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
             echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
             echo "export DB_USER_NAME='baffle'" >> /etc/environment
-            echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+            echo "export DB_PASSWORD='$(echo '${DBPassword}' | sed 's/#/\#/g')'" >> /etc/environment
             echo "export KM_AWS_REGION='${AWS::Region}'" >> /etc/environment
             echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
             echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment

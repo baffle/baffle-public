@@ -364,7 +364,7 @@ Resources:
         - Fn::Base64: !Sub |
             #!/bin/bash
             echo "export USERNAME='${UserEmail}'" >> /etc/environment
-            echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+            echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\#/g')'" >> /etc/environment
             echo "export KM_AWS_REGION='${AWS::Region}'" >> /etc/environment
             echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
             echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
@@ -380,7 +380,7 @@ Resources:
         - Fn::Base64: !Sub |
             #!/bin/bash
             echo "export USERNAME='${UserEmail}'" >> /etc/environment
-            echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\\#/g')'" >> /etc/environment
+            echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\#/g')'" >> /etc/environment
             echo "export KM_AWS_REGION='${AWS::Region}'" >> /etc/environment
             echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
             echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
