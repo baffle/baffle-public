@@ -56,13 +56,13 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-03e2409d7bf3d656f
+      ImageId: ami-03e2409d7bf3d656f
     us-east-2:
-      AMI: ami-015d949c0f466fd2b
+      ImageId: ami-015d949c0f466fd2b
     us-west-1:
-      AMI: ami-015d949c0f466fd2b
+      ImageId: ami-015d949c0f466fd2b
     us-west-2:
-      AMI: ami-015d949c0f466fd2b
+      ImageId: ami-015d949c0f466fd2b
 
 Resources:
   BaffleVPC:
@@ -366,7 +366,7 @@ Resources:
     DependsOn: BaffleShieldInstanceProfile
     Properties:
       IamInstanceProfile: !Ref BaffleShieldInstanceProfile
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", ImageId]
       InstanceType: t2.large
       KeyName: !Ref BaffleKeyPair
       NetworkInterfaces:

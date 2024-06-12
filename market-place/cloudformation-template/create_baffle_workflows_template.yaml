@@ -52,7 +52,7 @@ Parameters:
     AllowedValues:
       - "ALL"
       - "STATIC_MASK"
-      - "DYNAMIC_MASK"
+      - "DYNImageIdC_MASK"
       - "CLE"
       - "RLE"
       - "DLE"
@@ -88,7 +88,7 @@ Conditions:
 
   IsDynamicMask: !Equals
     - !Ref Workflow
-    - "DYNAMIC_MASK"
+    - "DYNImageIdC_MASK"
 
   IsCLE: !Equals
     - !Ref Workflow
@@ -118,55 +118,55 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-0426114d91757ed49
     us-east-2:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-2:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     af-south-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-east-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-south-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-south-2:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-southeast-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-southeast-2:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-southeast-3:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-northeast-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-northeast-2:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-northeast-3:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     ca-central-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     eu-central-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     eu-central-2:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     eu-west-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     eu-west-2:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     eu-west-3:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     eu-south-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     eu-south-2:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     eu-north-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     me-central-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     sa-east-1:
-      AMI: ami-0426114d91757ed49
+      ImageId: ami-xxxxxxxxxxxxxxxxx
 
 Resources:
   BaffleVPC:
@@ -583,7 +583,7 @@ Resources:
     DependsOn: [BaffleDB, BaffleShieldInstanceProfile]
     Properties:
       IamInstanceProfile: !Ref BaffleShieldInstanceProfile
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", ImageId]
       InstanceType: !Ref InstanceType
       KeyName: !Ref BaffleKeyPair
       NetworkInterfaces:
