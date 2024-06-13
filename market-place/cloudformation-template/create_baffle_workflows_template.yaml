@@ -536,6 +536,98 @@ Resources:
       AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-3"
       TargetKeyId: !Ref BaffleShield3Key
 
+  BaffleShield4Key:
+    Type: "AWS::KMS::Key"
+    Condition: CreateMultipleKeys
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield4KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Condition: CreateMultipleKeys
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-4"
+      TargetKeyId: !Ref BaffleShield4Key
+
+  BaffleShield5Key:
+    Type: "AWS::KMS::Key"
+    Condition: CreateMultipleKeys
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield5KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Condition: CreateMultipleKeys
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-5"
+      TargetKeyId: !Ref BaffleShield5Key
+
   BaffleEC2SecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
@@ -763,3 +855,13 @@ Outputs:
     Condition: CreateDMS
     Description: "Command to stop DMS migration task"
     Value: !Join [ "", [ "aws dms stop-replication-task --replication-task-arn ", !Ref DMSMigrationTask ] ]
+
+  ExtraKEK1Alias:
+    Condition: CreateMultipleKeys
+    Description: "Extra KEK to be used at workshop"
+    Value: !Ref BaffleShield5KeyAliasBaffleShield4KeyAlias
+
+  ExtraKEK2Alias:
+    Condition: CreateMultipleKeys
+    Description: "Extra KEK to be used at workshop"
+    Value: !Ref BaffleShield5KeyAliasBaffleShield5KeyAlias
