@@ -52,7 +52,7 @@ Parameters:
     AllowedValues:
       - "ALL"
       - "STATIC_MASK"
-      - "DYNImageIdC_MASK"
+      - "DYNAMIC_MASK"
       - "CLE"
       - "RLE"
       - "DLE"
@@ -88,7 +88,7 @@ Conditions:
 
   IsDynamicMask: !Equals
     - !Ref Workflow
-    - "DYNImageIdC_MASK"
+    - "DYNAMIC_MASK"
 
   IsCLE: !Equals
     - !Ref Workflow
