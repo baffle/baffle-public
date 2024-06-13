@@ -859,9 +859,9 @@ Outputs:
   ExtraKEK1Alias:
     Condition: CreateMultipleKeys
     Description: "Extra KEK to be used at workshop"
-    Value: !Ref BaffleShield5KeyAliasBaffleShield4KeyAlias
+    Value: !Ref BaffleShield4KeyAlias
 
   ExtraKEK2Alias:
     Condition: CreateMultipleKeys
     Description: "Extra KEK to be used at workshop"
-    Value: !Ref BaffleShield5KeyAliasBaffleShield5KeyAlias
+    Value: !Ref BaffleShield5KeyAlias
