@@ -232,6 +232,17 @@ Resources:
 
   BaffleKeyStorageBucket:
     Type: "AWS::S3::Bucket"
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  DeleteBucketLambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-DeleteBucketLambdaFunction'
+      RetentionInDays: 3
 
   DeleteBucketLambdaExecutionRole:
     Type: "AWS::IAM::Role"
@@ -254,7 +265,7 @@ Resources:
                   - "logs:CreateLogGroup"
                   - "logs:CreateLogStream"
                   - "logs:PutLogEvents"
-                Resource: "*"
+                Resource: !GetAtt DeleteBucketLambdaLogGroup.Arn
         - PolicyName: S3Policy
           PolicyDocument:
             Version: 2012-10-17
@@ -270,6 +281,7 @@ Resources:
   DeleteBucketLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
+      ReservedConcurrentExecutions: 1
       Code:
         ZipFile: |
           import cfnresponse
@@ -294,12 +306,10 @@ Resources:
       Handler: index.handler
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
-
-  DeleteBucketLambdaLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${DeleteBucketLambdaFunction}'
-      RetentionInDays: 3
+      VpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
 
   CustomResource:
     Type: "Custom::CustomResource"
@@ -332,6 +342,8 @@ Resources:
     Type: "AWS::RDS::DBInstance"
     DeletionPolicy: Delete
     Properties:
+      StorageEncrypted: true
+      PubliclyAccessible: false
       DBParameterGroupName: !Ref DBParameterGroup
       AllocatedStorage: "20"
       DBInstanceClass: !Join [ "", [ "db.", !Ref InstanceType ] ]
@@ -362,6 +374,7 @@ Resources:
   BaffleDBSecurityGroupIngressFromSameVPC:
     Type: "AWS::EC2::SecurityGroupIngress"
     Properties:
+      Description: "Ingress DB from same VPC"
       GroupId: !GetAtt BaffleDBSecurityGroup.GroupId
       IpProtocol: tcp
       FromPort: 5432
@@ -371,6 +384,7 @@ Resources:
   BaffleDBSecurityGroupEgressFromSameVPC:
     Type: "AWS::EC2::SecurityGroupEgress"
     Properties:
+      Description: "Egress DB from same VPC"
       GroupId: !GetAtt BaffleDBSecurityGroup.GroupId
       IpProtocol: -1
       CidrIp: !GetAtt BaffleVPC.CidrBlock
@@ -399,7 +413,11 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: "Allow"
-                Action: "s3:*"
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:GetBucketPolicy"
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
@@ -408,6 +426,7 @@ Resources:
     Type: "AWS::KMS::Key"
     Properties:
       Description: "Baffle AWS Key"
+      EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
@@ -453,6 +472,7 @@ Resources:
     Condition: CreateMultipleKeys
     Properties:
       Description: "Baffle AWS Key"
+      EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
@@ -499,6 +519,7 @@ Resources:
     Condition: CreateMultipleKeys
     Properties:
       Description: "Baffle AWS Key"
+      EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
@@ -545,6 +566,7 @@ Resources:
     Condition: CreateMultipleKeys
     Properties:
       Description: "Baffle AWS Key"
+      EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
@@ -591,6 +613,7 @@ Resources:
     Condition: CreateMultipleKeys
     Properties:
       Description: "Baffle AWS Key"
+      EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
         Statement:
@@ -637,15 +660,18 @@ Resources:
     Properties:
       GroupDescription: "Security group with specific ports open"
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        - Description: Allow HTTPS traffic
+          IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
-        - IpProtocol: tcp
+        - Description: Allow BM traffic
+          IpProtocol: tcp
           FromPort: 8446
           ToPort: 8446
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
-        - IpProtocol: tcp
+        - Description: Allow Postgres traffic
+          IpProtocol: tcp
           FromPort: 5432
           ToPort: 5432
           CidrIp: !GetAtt BaffleVPC.CidrBlock
