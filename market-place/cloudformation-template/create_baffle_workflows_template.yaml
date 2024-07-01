@@ -86,14 +86,6 @@ Conditions:
     - !Ref Workflow
     - "STATIC_MASK"
 
-  IsDynamicMask: !Equals
-    - !Ref Workflow
-    - "DYNAMIC_MASK"
-
-  IsCLE: !Equals
-    - !Ref Workflow
-    - "CLE"
-
   IsRLE: !Equals
     - !Ref Workflow
     - "RLE"
@@ -101,10 +93,6 @@ Conditions:
   IsDLE: !Equals
     - !Ref Workflow
     - "DLE"
-
-  IsRQE: !Equals
-    - !Ref Workflow
-    - "RQE_MIGRATION"
 
   CreateDMS: !Or
     - !Condition IsAll
@@ -318,7 +306,6 @@ Resources:
     Properties:
       ServiceToken: !GetAtt DeleteBucketLambdaFunction.Arn
       s3bucketName: !Ref BaffleKeyStorageBucket
-    DependsOn: BaffleKeyStorageBucket
 
   BaffleDBSecret:
     Type: AWS::SecretsManager::Secret
@@ -689,7 +676,6 @@ Resources:
 
   BaffleEC2Instance:
     Type: "AWS::EC2::Instance"
-    DependsOn: [BaffleDB, BaffleShieldInstanceProfile]
     Properties:
       IamInstanceProfile: !Ref BaffleShieldInstanceProfile
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", ImageId]
