@@ -306,12 +306,6 @@ Resources:
       Handler: index.handler
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
-      VpcConfig:
-        SubnetIds:
-          - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
-        SecurityGroupIds:
-          - !GetAtt BaffleEC2SecurityGroup.GroupId
 
   CustomResource:
     Type: "Custom::CustomResource"
