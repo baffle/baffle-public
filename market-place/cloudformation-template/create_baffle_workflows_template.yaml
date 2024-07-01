@@ -173,6 +173,11 @@ Resources:
       RoleName: dms-vpc-role
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W28
+            reason: "This role is required for DMS to run on vpc."
 
   BaffleVPC:
     Type: "AWS::EC2::VPC"
@@ -180,6 +185,11 @@ Resources:
       CidrBlock: "10.0.0.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W60
+            reason: "Enabling flow log requires a lot of resource. This is out of scope."
 
   InternetGateway:
     Type: "AWS::EC2::InternetGateway"
@@ -237,12 +247,24 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W51
+            reason: "The policy is controlled by ec2 instance policy, so no need os s3 bucket policy"
+          - id: W35
+            reason: "The access logging will require additional s3 bucket to log"
 
   DeleteBucketLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
       LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-DeleteBucketLambdaFunction'
       RetentionInDays: 3
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: "This is for function that deletes files on s3. Don't need to encrypt it."
 
   DeleteBucketLambdaExecutionRole:
     Type: "AWS::IAM::Role"
@@ -306,6 +328,11 @@ Resources:
       Handler: index.handler
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "Deploying inside VPC requires a to give permission to network. The function deleted the files from s3 while stack is deleted."
 
   CustomResource:
     Type: "Custom::CustomResource"
@@ -323,6 +350,11 @@ Resources:
           "username": "baffle",
           "password": "${DBPassword}"
         }
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W77
+            reason: "Default keyid aws/secretsmanager is used"
 
   DBParameterGroup:
     Type: 'AWS::RDS::DBParameterGroup'
@@ -352,6 +384,11 @@ Resources:
       DBSubnetGroupName: !Ref BaffleDBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt BaffleDBSecurityGroup.GroupId
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F80
+            reason: "RDS cannot be delete protected as it needs to be deleted on stack tear down"
 
   BaffleDBSubnetGroup:
     Type: "AWS::RDS::DBSubnetGroup"
@@ -366,6 +403,11 @@ Resources:
     Properties:
       VpcId: !Ref BaffleVPC
       GroupDescription: "Baffle DB Security Group"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W40
+            reason: "This egress require to communication on all port between db and ec2."
 
   BaffleDBSecurityGroupIngressFromSameVPC:
     Type: "AWS::EC2::SecurityGroupIngress"
@@ -684,6 +726,13 @@ Resources:
           IpProtocol: "-1"
           CidrIp:  !GetAtt BaffleVPC.CidrBlock
       VpcId: !Ref BaffleVPC
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W40
+            reason: "This egress require to communication on all port to user machine and vpc."
+          - id: W5
+            reason: "This is required for ec2 to fetch a file from github repo."
 
   BaffleShieldInstanceProfile:
     Type: "AWS::IAM::InstanceProfile"
