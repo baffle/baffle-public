@@ -768,6 +768,7 @@ Resources:
 
   BaffleEC2Instance:
     Type: "AWS::EC2::Instance"
+    DependsOn: [BaffleEC2SecurityGroup]
     Properties:
       IamInstanceProfile: !Ref BaffleShieldInstanceProfile
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", ImageId]
