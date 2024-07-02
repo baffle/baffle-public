@@ -157,28 +157,6 @@ Mappings:
       ImageId: ami-xxxxxxxxxxxxxxxxx
 
 Resources:
-  # This DMS Role is required on some account for DMS to spin up
-  DmsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - dms.amazonaws.com
-            Action:
-              - 'sts:AssumeRole'
-      RoleName: dms-vpc-role
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole
-    Metadata:
-      cfn_nag:
-        rules_to_suppress:
-          - id: W28
-            reason: "This role is required for DMS to run on vpc."
-
   BaffleVPC:
     Type: "AWS::EC2::VPC"
     Properties:
