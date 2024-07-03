@@ -1,0 +1,15 @@
+{{ $dsbcaCert := index (lookup "v1" "Secret" .Release.Namespace "dsb-ca").data "dsbca.crt" }}
+{{ $dsbcaKey := index (lookup "v1" "Secret" .Release.Namespace "dsb-ca").data "dsbca.key" }}
+{{ $dsbca := buildCustomCert $dsbcaCert $dsbcaKey }}
+{{ $dsbShieldCert := genSignedCert "example.com" nil nil 1825 $dsbca }}
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: {{ .Release.Name }}-certs
+  annotations:
+    "helm.sh/hook": "pre-install"
+    "helm.sh/hook-delete-policy": "before-hook-creation"
+data:
+  dsbshield.crt: {{ $dsbShieldCert.Cert | b64enc }}
+  dsbshield.key: {{ $dsbShieldCert.Key | b64enc }}

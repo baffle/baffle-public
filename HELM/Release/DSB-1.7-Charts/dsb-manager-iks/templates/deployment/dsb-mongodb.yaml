@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dsb-mongodb
+  labels:
+    app: dsb-mongodb
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: dsb-mongodb
+  template:
+    metadata:
+      labels:
+        app: dsb-mongodb
+    spec:
+      volumes:
+        - name: dsb-mongodb-volume
+          persistentVolumeClaim:
+            claimName: dsb-mongodb-pvc
+        - name: dsb-secret
+          secret:
+            secretName: dsb-secret
+      securityContext:
+        fsGroup: 5001
+        runAsUser: 5001
+      containers:
+      - name: dsb-mongodb
+        image: "{{ .Values.dsbMongodb.image }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+        - name: dsb-mongodb-volume
+          mountPath: /data/db
+        - name: dsb-secret
+          mountPath: /run/secrets/mongodb_user
+          subPath: dsb-mongodb-username
+        - name: dsb-secret
+          mountPath: /run/secrets/mongodb_pass
+          subPath: dsb-mongodb-password
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME_FILE
+          value: /run/secrets/mongodb_user
+        - name: MONGO_INITDB_ROOT_PASSWORD_FILE
+          value: /run/secrets/mongodb_pass
+        - name: MONGO_INITDB_DATABASE
+          value: admin 
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecrets }}

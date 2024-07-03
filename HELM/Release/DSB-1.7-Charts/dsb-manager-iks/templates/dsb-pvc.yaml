@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: dsb-mongodb-pvc
+ annotations:
+   "helm.sh/hook": pre-install
+spec:
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: 5Gi
+ {{ $ClusterType := index (lookup "v1" "Node" "" "").items 0 "metadata" "labels" "ibm-cloud.kubernetes.io/iaas-provider" }}
+ {{ if eq $ClusterType "softlayer" }}storageClassName: "ibmc-block-bronze"{{ end }}
+ {{ if eq $ClusterType "g2" }}storageClassName: "ibmc-vpc-block-custom"{{ end }}
+ {{ if eq $ClusterType "upi" }}storageClassName: "ibmc-vpc-block-metro-custom"{{ end }}
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: dsb-manager-pvc
+ annotations:
+   "helm.sh/hook": pre-install
+spec:
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: 5Gi
+ {{ $ClusterType := index (lookup "v1" "Node" "" "").items 0 "metadata" "labels" "ibm-cloud.kubernetes.io/iaas-provider" }}
+ {{ if eq $ClusterType "softlayer" }}storageClassName: "ibmc-block-bronze"{{ end }}
+ {{ if eq $ClusterType "g2" }}storageClassName: "ibmc-vpc-block-custom"{{ end }}
+ {{ if eq $ClusterType "upi" }}storageClassName: "ibmc-vpc-block-metro-custom"{{ end }}
+

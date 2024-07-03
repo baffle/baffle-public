@@ -1,0 +1,36 @@
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Release-wide Values
+image:
+  pullPolicy: 'Always'
+  pullSecrets: 'all-icr-io'
+
+# Service Specific Values
+dsbShield:
+  deployment:
+    image: icr.io/data-security-broker/dsb-shield-postgresql:Release-DSB.1.7.0.185
+  service:
+    type: LoadBalancer
+    port: 8444
+  secret:
+    credstorePass:
+  #pvc:
+    #storageClass: standard
+  configMap:
+    data:
+      BM_IP: "dsb-nginx"
+      BM_SHIELD_SYNC_ID: "<SYNC_ID>"
+      BS_SSL: "true"
+      BS_SSL_KEYSTORE_FILE: "/opt/sslconfig/baffleshield-keystore.jks"
+      BS_SSL_KEYSTORE_PASSWORD: "keystore"
+      BS_SSL_TRUSTSTORE_FILE: "/opt/sslconfig/baffleshield-keystore.jks"
+      BS_SSL_TRUSTSTORE_PASSWORD: "keystore"
+      BS_SSL_TLS_VERSION: "TLSv1.2"
+      BM_MTLS: "true"
+      BM_MTLS_CLIENT_CERT_PATH: "/opt/sslconfig/dsbshield.crt"
+      BM_MTLS_CLIENT_KEY_PATH: "/opt/sslconfig/dsbshield.key"
+      BM_MTLS_CA_CERT_PATH: "/opt/sslconfig/dsbca.crt"
+      BM_MTLS_KEYSTORE_PASSWORD: "keystore"
+      JAVA_ARGS: ""
+      #JAVA_ARGS: "-Djdk.tls.namedGroups='p256_frodo640aes,p384_kyber768,p521_kyber1024,p256_kyber512,kyber512,p521_kyber1024,kyber768,prime256v1,X25519,secp384r1,secp521r1'"

@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dsb-web
+  labels:
+    app: dsb-web
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: dsb-web
+  template:
+    metadata:
+      labels:
+        app: dsb-web
+    spec:
+      #securityContext:
+      #  fsGroup: 5000
+      containers:
+      - name: dsb-web
+        image: "{{ .Values.dsbWeb.image }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        {{ $ClusterVersion := index (lookup "config.openshift.io/v1" "ClusterVersion" "" "").items 0 "status" "desired" "version" }}
+        {{ if or (contains "4.11" $ClusterVersion ) (contains "4.12" $ClusterVersion ) (contains "4.13" $ClusterVersion ) }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        {{ end }}
+        {{ if or (contains "4.9" $ClusterVersion) (contains "4.10" $ClusterVersion) }}
+        {{ end }}
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecrets }}

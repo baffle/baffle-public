@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: labeller-add
+  annotations:
+      "helm.sh/hook": "post-install"
+      "helm.sh/hook-delete-policy": "hook-succeeded"
+spec:
+  template:
+    spec:
+      serviceAccountName: label-updater
+      containers:
+      - name: labeller
+        image: icr.io/data-security-broker/labeller
+        {{ $ClusterVersion := index (lookup "config.openshift.io/v1" "ClusterVersion" "" "").items 0 "status" "desired" "version" }}
+        {{ if or (contains "4.11" $ClusterVersion ) (contains "4.12" $ClusterVersion ) (contains "4.13" $ClusterVersion ) }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        {{ end }}
+        {{ if or (contains "4.9" $ClusterVersion) (contains "4.10" $ClusterVersion) }}
+        {{ end }}
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            for node in $(kubectl get nodes -o=name); do
+              node_name=$(echo $node | cut -d / -f 2)
+              uuid=$(kubectl get configmap {{ .Values.dsbShield.configMap.name }} -o jsonpath='{.metadata.uid}' -n {{ .Release.Namespace }})
+              kubectl label nodes $node_name data-security-broker=true --overwrite || true
+              kubectl label nodes $node_name dsb-shield-$uuid=$uuid --overwrite || true
+            done
+      restartPolicy: Never
+  backoffLimit: 4
