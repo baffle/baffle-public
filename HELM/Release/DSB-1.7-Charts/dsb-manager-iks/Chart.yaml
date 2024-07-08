@@ -1,5 +1,0 @@
-apiVersion: v2
-appVersion: 1.70.1850
-description: A Helm chart for DSB-Manager Microservices application
-name: dsb-manager-iks
-version: 1.70.1850

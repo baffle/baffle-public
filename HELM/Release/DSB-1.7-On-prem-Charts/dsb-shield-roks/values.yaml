@@ -11,7 +11,7 @@ dsbShield:
   deployment:
     image: icr.io/data-security-broker/dsb-shield-postgresql:Release-DSB.1.7.0.185
   service:
-    type: LoadBalancer
+    type: LoadBalancer  # type can be 'LoadBalancer' or 'NodePort'
     port: 8444
   secret:
     credstorePass:

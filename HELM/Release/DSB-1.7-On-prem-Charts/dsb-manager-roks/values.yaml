@@ -12,6 +12,7 @@ secrets:
 # Do not edit the following
   keystorePass: a2V5c3RvcmU=
   truststorePass: Y2hhbmdlaXQ=
+# Set the values as per requirement
   initPass:
   credstorePass:
 
@@ -21,12 +22,16 @@ dsbMongodb:
   service:
     type: ClusterIP
     port: 27017
+  pvc:
+    storageClassName:
 
 dsbManager:
   image: icr.io/data-security-broker/dsb-manager:Release-DSB.1.7.0.185
   service:
     type: ClusterIP
     port: 8553
+  pvc:
+    storageClassName:
 
 dsbWeb:
   image: icr.io/data-security-broker/dsb-web:Release-DSB.1.7.0.185
@@ -37,5 +42,5 @@ dsbWeb:
 dsbNginx:
   image: icr.io/data-security-broker/dsb-nginx:Release-DSB.1.7.0.185
   service:
-    type: LoadBalancer
+    type: ClusterIP
     port: 443
