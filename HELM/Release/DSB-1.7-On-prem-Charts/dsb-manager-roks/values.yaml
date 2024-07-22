@@ -1,0 +1,46 @@
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Release-wide Values
+
+image:
+  pullPolicy: 'Always'
+  pullSecrets: 'all-icr-io'
+
+# Enter the base64 encoded value (generated without trailing or leading spaces) of mongodb username and password
+secrets:
+# Do not edit the following
+  keystorePass: a2V5c3RvcmU=
+  truststorePass: Y2hhbmdlaXQ=
+# Set the values as per requirement
+  initPass:
+  credstorePass:
+
+# Service Specific Values
+dsbMongodb:
+  image: icr.io/data-security-broker/dsb-mongodb:Release-DSB.1.7.0.185
+  service:
+    type: ClusterIP
+    port: 27017
+  pvc:
+    storageClassName:
+
+dsbManager:
+  image: icr.io/data-security-broker/dsb-manager:Release-DSB.1.7.0.185
+  service:
+    type: ClusterIP
+    port: 8553
+  pvc:
+    storageClassName:
+
+dsbWeb:
+  image: icr.io/data-security-broker/dsb-web:Release-DSB.1.7.0.185
+  service:
+    type: ClusterIP
+    port: 8080
+
+dsbNginx:
+  image: icr.io/data-security-broker/dsb-nginx:Release-DSB.1.7.0.185
+  service:
+    type: ClusterIP
+    port: 443

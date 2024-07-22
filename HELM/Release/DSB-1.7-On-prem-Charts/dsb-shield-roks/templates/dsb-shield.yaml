@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.dsbShield.replicas}}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      volumes:
+        - name: dsb-shield-certs
+          secret:
+            secretName: {{ .Release.Name }}-certs
+        - name: dsb-ca
+          secret:
+            secretName: dsb-ca
+
+      containers:
+      - name: {{ .Release.Name }}
+        image: "{{ .Values.dsbShield.deployment.image}}"
+        imagePullPolicy: {{ .Values.image.pullPolicy}}
+        {{ $ClusterVersion := index (lookup "config.openshift.io/v1" "ClusterVersion" "" "").items 0 "status" "desired" "version" }}
+        {{ if or (contains "4.11" $ClusterVersion ) (contains "4.12" $ClusterVersion ) (contains "4.13" $ClusterVersion ) }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        {{ end }}
+        {{ if or (contains "4.9" $ClusterVersion) (contains "4.10" $ClusterVersion) }}
+        {{ end }}
+        envFrom:
+        - configMapRef:
+            name: {{ .Release.Name }}-config
+        env:
+          - name: KMS_CONFIG_PROPERTIES
+            valueFrom:
+              secretKeyRef:
+                name: dsb-secret
+                key: dsbCredstorePassword
+        volumeMounts:
+        - name: dsb-shield-certs
+          mountPath: /opt/sslconfig/dsbshield.crt
+          subPath: dsbshield.crt
+        - name: dsb-shield-certs
+          mountPath: /opt/sslconfig/dsbshield.key
+          subPath: dsbshield.key
+        - name: dsb-ca
+          mountPath: /opt/sslconfig/dsbca.crt
+          subPath: dsbca.crt
+      imagePullSecrets:
+      - name: {{ .Values.image.pullSecrets }}

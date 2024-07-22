@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: dsb-nginx
+  name: dsb-nginx
+spec:
+  ports:
+  - port: {{ .Values.dsbNginx.service.port }}
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app: dsb-nginx
+  type: {{ .Values.dsbNginx.service.type }}

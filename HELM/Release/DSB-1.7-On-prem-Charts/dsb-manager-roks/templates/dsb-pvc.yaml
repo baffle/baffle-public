@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: dsb-mongodb-pvc
+ annotations:
+   "helm.sh/hook": pre-install
+spec:
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: 5Gi
+ storageClassName: {{ .Values.dsbMongodb.pvc.storageClassName }}
+
+---
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: dsb-manager-pvc
+ annotations:
+   "helm.sh/hook": pre-install
+spec:
+ accessModes:
+   - ReadWriteOnce
+ resources:
+   requests:
+     storage: 5Gi
+ storageClassName: {{ .Values.dsbManager.pvc.storageClassName }}
+
