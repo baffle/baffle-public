@@ -1,4 +1,4 @@
-"name","ssn","address","phone","title","degree"
+name,ssn,address,phone,title,degree
 "john doe","123-45-6789","123 main st anytown usa","555-555-1234","software engineer","bachelor's"
 "jane smith","987-65-4321","456 elm st othertown usa","555-555-5678","marketing manager","master's"
 "bob johnson","567-89-0123","789 oak st thistown usa","555-555-9012","sales representative","associate's"
