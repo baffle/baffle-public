@@ -860,7 +860,7 @@ configure_cle_data_proxy(){
     export "SYNC_ID=$cle_syncId"
   fi
 
-  add_endpoint_dpp__rbac_deploy false $dp_cle_id
+  add_endpoint_dpp_rbac_deploy false $dp_cle_id
 }
 
 ################## Configuration for RLE api service ##################
@@ -928,11 +928,11 @@ configure_rle_data_proxy(){
       export "SYNC_ID=$rle_syncId"
     fi
 
-    add_endpoint_dpp__rbac_deploy true $dp_rle_id
+    add_endpoint_dpp_rbac_deploy true $dp_rle_id
 }
 
 ######## ADD ENDPOINT, DPP, RBAC and DEPLOY ###########
-add_endpoint_dpp__rbac_deploy(){
+add_endpoint_dpp_rbac_deploy(){
     rle=$1
     dp_id=$2
 
@@ -969,7 +969,7 @@ add_endpoint_dpp__rbac_deploy(){
 
   # Add Data Policies
   # read full file
-  full_file_read_policy=$(get_full_file_policy_response "Rle-Tenant-1-full-file-read" "$read_endpoint_id"  "DECRYPT" "$aes_random_policy_id" "bill.txt")
+  full_file_read_policy=$(get_full_file_policy_response "dp-full-file-read" "$read_endpoint_id"  "DECRYPT" "$aes_random_policy_id" "bill.txt")
   full_file_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_read_policy" "id")
   if [ "full_file_read_policy_id" == "error" ]; then
     echo "DPP Read Full failed. Exiting script." >&2
@@ -979,7 +979,7 @@ add_endpoint_dpp__rbac_deploy(){
   fi
 
   # write full file
-  full_file_write_policy=$(get_full_file_policy_request "Rle-Tenant-1-full-file-write" "$write_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "bill.txt")
+  full_file_write_policy=$(get_full_file_policy_request "dp-full-file-write" "$write_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "bill.txt")
   full_file_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_write_policy" "id")
   if [ "$full_file_write_policy_id" == "error" ]; then
     echo "DPP Write Full failed. Exiting script." >&2
@@ -989,7 +989,7 @@ add_endpoint_dpp__rbac_deploy(){
   fi
 
    # field level read
-   field_read_policy=$(get_field_policy_response "Rle-Tenant-1-field-read" "$read_endpoint_id"  "DECRYPT" "$data_source_id" "$fpe_alphanum_policy_id"  "$fpe_decimal_policy_id" "employee.csv")
+   field_read_policy=$(get_field_policy_response "dp-field-read" "$read_endpoint_id"  "DECRYPT" "$data_source_id" "$fpe_alphanum_policy_id"  "$fpe_decimal_policy_id" "employee.csv")
    field_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_read_policy" "id")
    if [ "full_file_read_policy_id" == "error" ]; then
      echo "DPP Read Field failed. Exiting script." >&2
@@ -999,7 +999,7 @@ add_endpoint_dpp__rbac_deploy(){
    fi
 
   #field level write
-  field_write_policy=$(get_field_policy_request "Rle-Tenant-1-field-write" "$write_endpoint_id"  "ENCRYPT" "$data_source_id" "$fpe_alphanum_policy_id"  "$fpe_decimal_policy_id" "employee.csv")
+  field_write_policy=$(get_field_policy_request "dp-field-write" "$write_endpoint_id"  "ENCRYPT" "$data_source_id" "$fpe_alphanum_policy_id"  "$fpe_decimal_policy_id" "employee.csv")
   field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_write_policy" "id")
   if [ "$field_write_policy_id" == "error" ]; then
     echo "DPP Write Filed failed. Exiting script." >&2

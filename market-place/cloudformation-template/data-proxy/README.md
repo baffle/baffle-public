@@ -3,6 +3,7 @@
 This project contains a Cloudformation Template for setting up a Baffle Shield  Baffle Data Protection API
 
 ## Prerequisites:
+* S3 Bucket to be protected
 * AWS CLI installed and configured
 * Permissions necessary to run CloudFormation and to create resources referenced in the template
 

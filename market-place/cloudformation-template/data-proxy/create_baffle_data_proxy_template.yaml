@@ -10,7 +10,7 @@ Metadata:
         Parameters:
           - Workflow
       - Label:
-          default: "Name of S3 Bucket to be store protected data"
+          default: "Name of pre-created S3 Bucket to be store protected data"
         Parameters:
           - S3BucketName
       - Label:
