@@ -715,7 +715,7 @@ get_registration_payload(){
                       --arg password "$password" \
                       '{
                         "initPassword": "baffle123",
-                        "orgName": "baffle",
+                        "defaultAccount": "baffle",
                         "allowedDomains": ["baffle.io"],
                         "email": $username,
                         "firstName": "admin",

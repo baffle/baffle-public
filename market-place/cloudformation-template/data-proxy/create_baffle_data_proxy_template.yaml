@@ -56,13 +56,13 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      ImageId: ami-03e2409d7bf3d656f
+      ImageId: ami-077b42e71569627ab
     us-east-2:
-      ImageId: ami-015d949c0f466fd2b
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-1:
-      ImageId: ami-015d949c0f466fd2b
+      ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-2:
-      ImageId: ami-015d949c0f466fd2b
+      ImageId: ami-xxxxxxxxxxxxxxxxx
 
 Resources:
   BaffleVPC:

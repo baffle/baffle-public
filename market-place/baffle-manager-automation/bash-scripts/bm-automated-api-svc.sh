@@ -391,7 +391,7 @@ get_registration_payload(){
                       --arg password "$password" \
                       '{
                         "initPassword": "baffle123",
-                        "orgName": "baffle",
+                        "defaultAccount": "baffle",
                         "allowedDomains": ["baffle.io"],
                         "email": $username,
                         "firstName": "admin",
@@ -453,7 +453,7 @@ start_api_service(){
   echo "Private IP: $private_ip" >&2
   export "BM_URL=https://$private_ip"
 
-  cd /home/ec2-user/baffle-api-service
+  cd /home/ec2-user/baffle-api-svc
 
   echo "Starting API  Service..." >&2
   # Run docker compose
