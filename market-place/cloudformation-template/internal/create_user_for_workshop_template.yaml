@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Creates a user and attaches the inline policy for workshop"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "UserEmail"
+        Parameters:
+          - UserEmail
+
+      - Label:
+          default: "Password"
+        Parameters:
+          - UserPassword
+
+      - Label:
+          default: "StackName"
+        Parameters:
+          - StackName
+
+      - Label:
+          default: "DMS task ARN"
+        Parameters:
+          - TaskARN
+
+Parameters:
+  UserEmail:
+    Description: "Email for a user"
+    Type: String
+
+  UserPassword:
+    Description: "Password for a user"
+    Type: String
+    NoEcho: true
+
+  StackName:
+    Description: "Stack name for stack to provide a permission"
+    Type: String
+
+  TaskARN:
+    Description: "DMS Task ARN"
+    Type: String
+
+Resources:
+  WorkshopUser:
+    Type: 'AWS::IAM::User'
+    Properties:
+      UserName: !Ref UserEmail
+      LoginProfile:
+        Password: !Ref UserPassword
+
+  InlinePolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: !Sub '${UserEmail}-policy'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'dms:StartMetadataModelImport'
+              - 'dms:StartReplicationTask'
+              - 'dms:DescribeReplicationTaskAssessmentRuns'
+              - 'dms:StopReplicationTask'
+            Resource: !Ref TaskARN
+          - Effect: Allow
+            Action:
+              - 'dms:DescribeReplicationInstances'
+              - 'dms:DescribeEndpoints'
+              - 'dms:DescribeReplicationTaskAssessmentRuns'
+              - 'dms:DescribeReplicationTasks'
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - 'cloudformation:DescribeStacks'
+              - 'cloudformation:GetStackPolicy'
+            Resource: !Sub 'arn:aws:cloudformation:us-east-1:728290551517:stack/${StackName}/*'
+          - Effect: Allow
+            Action:
+              - 'cloudformation:ListStacks'
+            Resource: '*'
+      Users:
+        - Ref: WorkshopUser
+Outputs:
+  WorkshopUserName:
+    Value: !Ref UserEmail
+    Description: The name of the new IAM user for workshop
