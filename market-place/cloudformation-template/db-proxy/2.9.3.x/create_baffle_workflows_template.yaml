@@ -762,7 +762,7 @@ Resources:
         - CreateMultipleKeys
         - Fn::Base64: !Sub |
             #!/bin/bash
-            echo "export INIT_PASS='baffle123' >> /etc/environment
+            echo "export INIT_PASS='baffle123'" >> /etc/environment
             echo "export USERNAME='${UserEmail}'" >> /etc/environment
             echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\#/g')'" >> /etc/environment
             echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
@@ -783,7 +783,7 @@ Resources:
             sudo ./bm-automated-workflows.sh >> output.txt 2>&1
         - Fn::Base64: !Sub |
             #!/bin/bash
-            echo "export INIT_PASS='baffle123' >> /etc/environment
+            echo "export INIT_PASS='baffle123'" >> /etc/environment
             echo "export USERNAME='${UserEmail}'" >> /etc/environment
             echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\#/g')'" >> /etc/environment
             echo "export DB_HOST_NAME='${BaffleDB.Endpoint.Address}'" >> /etc/environment
