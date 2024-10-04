@@ -1,0 +1,417 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Create a resources needed for Baffle Data Protection for Data Proxy"
+
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+            default: "Baffle Data Protection for Data Proxy Workflow"
+        Parameters:
+          - Workflow
+      - Label:
+          default: "Baffle Manager credential"
+        Parameters:
+          - UserEmail
+          - UserPassword
+      - Label:
+          default: "User IP to whitelist (https://checkip.amazonaws.com)"
+        Parameters:
+          - MyIP
+Parameters:
+  Workflow:
+    Description: "Select workflow to create required resources"
+    Type: String
+    Default: "Standard"
+    AllowedValues:
+      - "Standard"
+      - "BYOK"
+
+  UserEmail:
+    Description: "Email for Baffle Manage and PGAdmin UI user"
+    Type: String
+
+  UserPassword:
+    Description: "Password for Baffle Manage and PGAdmin UI user"
+    Type: String
+    NoEcho: true
+
+  MyIP:
+    Description: "User IP to be whitelisted"
+    Type: String
+
+Conditions:
+  CreateMultipleKeys: !Equals
+    - !Ref Workflow
+    - "BYOK"
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      ImageId: ami-0e4c5ff0a5bc2f341
+    us-east-2:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    us-west-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    us-west-2:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+
+Resources:
+  BaffleVPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+
+  AttachGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref BaffleVPC
+
+  DefaultPublicRoute:
+    Type: "AWS::EC2::Route"
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      CidrBlock: "10.0.1.0/24"
+      AvailabilityZone: !Select [ 0, Fn::GetAZs: !Ref "AWS::Region" ]
+
+  PrivateSubnet1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      CidrBlock: "10.0.2.0/24"
+      AvailabilityZone: !Select [ 1, Fn::GetAZs: !Ref "AWS::Region" ]
+
+  PrivateSubnet2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref BaffleVPC
+      CidrBlock: "10.0.3.0/24"
+      AvailabilityZone: !Select [ 0, Fn::GetAZs: !Ref "AWS::Region" ]
+
+  PublicSubnetRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  BaffleKeyStorageBucket:
+    Type: "AWS::S3::Bucket"
+
+  DeleteBucketLambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: LoggingPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+        - PolicyName: S3Policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:List*"
+                  - "s3:DeleteObject"
+                Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
+
+  DeleteBucketLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+          
+          def handler(event, context):
+              print(event)
+              responseData = {}
+              ResponseStatus = cfnresponse.SUCCESS
+              s3bucketName = event['ResourceProperties']['s3bucketName']
+      
+              if event['RequestType'] == 'Delete':
+                  # Need to empty the S3 bucket before it is deleted
+                  s3 = boto3.resource('s3')
+                  bucket = s3.Bucket(s3bucketName)
+                  bucket.objects.all().delete()
+          
+                  responseData['Message'] = "Resource deletion successful!"
+          
+              cfnresponse.send(event, context, ResponseStatus, responseData)
+
+      Handler: index.handler
+      Runtime: python3.9
+      Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
+
+  DeleteBucketLambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${DeleteBucketLambdaFunction}'
+      RetentionInDays: 3
+
+  BaffleKeyStorageBucketDeleteCustomResource:
+    Type: "Custom::CustomResource"
+    Properties:
+      ServiceToken: !GetAtt DeleteBucketLambdaFunction.Arn
+      s3bucketName: !Ref BaffleKeyStorageBucket
+    DependsOn: BaffleKeyStorageBucket
+
+  BaffleShieldRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: DEKBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "s3:*"
+                Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
+
+  BaffleShield1Key:
+    Type: "AWS::KMS::Key"
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield1KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-1"
+      TargetKeyId: !Ref BaffleShield1Key
+  BaffleShield2Key:
+    Type: "AWS::KMS::Key"
+    Condition: CreateMultipleKeys
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield2KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Condition: CreateMultipleKeys
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-2"
+      TargetKeyId: !Ref BaffleShield2Key
+
+  BaffleEC2SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Security group with specific ports open"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !GetAtt BaffleVPC.CidrBlock
+        - IpProtocol: tcp
+          FromPort: 8444
+          ToPort: 8444
+          CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+      SecurityGroupEgress:
+        - Description: Allow all outbound traffic to user
+          IpProtocol: "-1"
+          CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+        - Description: Allow all outbound traffic to user
+          IpProtocol: "-1"
+          CidrIp: !GetAtt BaffleVPC.CidrBlock
+        - Description: Allow 443 to outside, needed to download script from github
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref BaffleVPC
+
+  BaffleShieldInstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Roles:
+        - !Ref BaffleShieldRole
+
+  BaffleKeyPair:
+    Type: "AWS::EC2::KeyPair"
+    Properties:
+      KeyName: !Join [ "-", [ !Ref "AWS::StackName", "key-pair" ] ]
+
+  BaffleEC2Instance:
+    Type: "AWS::EC2::Instance"
+    DependsOn: BaffleShieldInstanceProfile
+    Properties:
+      IamInstanceProfile: !Ref BaffleShieldInstanceProfile
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", ImageId]
+      InstanceType: t2.large
+      KeyName: !Ref BaffleKeyPair
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          SubnetId: !Ref PublicSubnet1
+          AssociatePublicIpAddress: true
+          GroupSet:
+            - !GetAtt BaffleEC2SecurityGroup.GroupId
+      UserData:
+        !If
+        - CreateMultipleKeys
+        - Fn::Base64: !Sub |
+            #!/bin/bash
+            echo "export INIT_PASS='baffle123'" >> /etc/environment
+            echo "export USERNAME='${UserEmail}'" >> /etc/environment
+            echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\#/g')'" >> /etc/environment
+            echo "export KM_AWS_REGION='${AWS::Region}'" >> /etc/environment
+            echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
+            echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
+            echo "export KM_KEK_NAME_1='${BaffleShield2KeyAlias}'" >> /etc/environment
+            echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+            source /etc/environment
+            # Setup docker
+            sudo service docker start >> output.txt 2>&1
+            cd /home/ec2-user
+            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/2.9.3.x/bm-automated-data-proxy.sh
+            chmod +x bm-automated-data-proxy.sh >> output.txt 2>&1
+            sudo ./bm-automated-data-proxy.sh >> output.txt 2>&1
+        - Fn::Base64: !Sub |
+            #!/bin/bash
+            echo "export INIT_PASS='baffle123'" >> /etc/environment            
+            echo "export USERNAME='${UserEmail}'" >> /etc/environment
+            echo "export PASSWORD='$(echo '${UserPassword}' | sed 's/#/\#/g')'" >> /etc/environment
+            echo "export KM_AWS_REGION='${AWS::Region}'" >> /etc/environment
+            echo "export KM_S3_BUCKET_NAME='${BaffleKeyStorageBucket}'" >> /etc/environment
+            echo "export KM_KEK_NAME='${BaffleShield1KeyAlias}'" >> /etc/environment
+            echo "export EXECUTE_WORKFLOW='${Workflow}'" >> /etc/environment
+            source /etc/environment
+            # Setup docker
+            sudo service docker start >> output.txt 2>&1
+            cd /home/ec2-user
+            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/2.9.3.x/bm-automated-data-proxy.sh
+            chmod +x bm-automated-data-proxy.sh >> output.txt 2>&1
+            sudo ./bm-automated-data-proxy.sh >> output.txt 2>&1
+Outputs:
+
+  StackRegion:
+    Description: "Stack Region"
+    Value: !Ref "AWS::Region"
+
+  BaffleEC2SecurityGroup:
+    Description: "Baffle Service Security Group"
+    Value: !Join [ "", [ "https://", !Ref "AWS::Region", ".console.aws.amazon.com/ec2/home?region=",  !Ref "AWS::Region", "#SecurityGroups:search=", !Ref BaffleEC2SecurityGroup ] ]
+
+  BaffleManagerURL:
+    Description: "The URL for Baffle Manager"
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName ] ]
+
+  DataProxyURL:
+    Description: "The URL for Data Proxy"
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444" ] ]
+
+  DataProxyHealthCheck:
+    Description: "The health check URL for Data Proxy"
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444", "/dataproxy/status" ] ]
