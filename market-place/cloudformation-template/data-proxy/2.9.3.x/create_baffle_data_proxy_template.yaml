@@ -152,6 +152,8 @@ Resources:
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleDataStorageBucket ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleDataStorageBucket, "/*" ] ]
 
   DeleteBucketLambdaFunction:
     Type: "AWS::Lambda::Function"
@@ -192,7 +194,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt DeleteBucketLambdaFunction.Arn
       s3bucketName: !Ref BaffleDataStorageBucket
-    DependsOn: BaffleKeyStorageBucket
+    DependsOn: BaffleDataStorageBucket
 
   BaffleKeyStorageBucketDeleteCustomResource:
     Type: "Custom::CustomResource"
