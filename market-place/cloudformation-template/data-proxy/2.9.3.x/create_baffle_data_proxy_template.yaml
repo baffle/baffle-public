@@ -113,6 +113,9 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
 
+  BaffleDataStorageBucket:
+    Type: "AWS::S3::Bucket"
+
   BaffleKeyStorageBucket:
     Type: "AWS::S3::Bucket"
 
@@ -184,6 +187,13 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${DeleteBucketLambdaFunction}'
       RetentionInDays: 3
 
+  BaffleDataStorageBucketDeleteCustomResource:
+    Type: "Custom::CustomResource"
+    Properties:
+      ServiceToken: !GetAtt DeleteBucketLambdaFunction.Arn
+      s3bucketName: !Ref BaffleDataStorageBucket
+    DependsOn: BaffleKeyStorageBucket
+
   BaffleKeyStorageBucketDeleteCustomResource:
     Type: "Custom::CustomResource"
     Properties:
@@ -212,6 +222,15 @@ Resources:
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
+        - PolicyName: DataBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "s3:*"
+                Resource:
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleDataStorageBucket ] ]
+                  - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleDataStorageBucket, "/*" ] ]
 
   BaffleShield1Key:
     Type: "AWS::KMS::Key"
@@ -415,3 +434,7 @@ Outputs:
   DataProxyHealthCheck:
     Description: "The health check URL for Data Proxy"
     Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444", "/dataproxy/status" ] ]
+
+  DataProxyS3Bucket:
+    Description: "The S3 Bucket to store Data"
+    Value: !Ref BaffleDataStorageBucket

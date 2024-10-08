@@ -26,11 +26,10 @@ tenant_url="$base_url/api/v2/key-management/tenants"
 data_proxy_url="$base_url/api/v3/data-proxy/clusters"
 enc_policy_url="$base_url/api/v3/enc-policies"
 access_group_url="$base_url/api/v3/data-proxy/access-groups"
-data_source_url="$base_url/api/v3/data-proxy/data-sources"
 
 full_file_name="kia.txt"
-#csv_file_name="customers.csv"
-#json_file_name="john.json"
+csv_file_name="customers.csv"
+json_file_name="john.json"
 
 # Function to send a GET request and process the response
 send_get_request() {
@@ -219,28 +218,6 @@ get_tenant_payload(){
   echo "$tenant_payload"
 }
 
-# get data source
-get_data_source_payload(){
-  name=$1
-  data_source_payload=$(jq -n \
-                --arg name "$name" \
-                '{
-                  "name": $name,
-                  "type":"CSV",
-                  "csvPayload": {
-                    "header": true,
-                    "standardDelimiter": "COMMA",
-                    "encoding":"UTF_8",
-                    "columnNames":[
-                      {"name":"name","dataType":"STRING"},
-                      {"name":"ssn","dataType":"STRING"}
-                    ]
-                  }
-                }')
-
-  echo "$data_source_payload"
-}
-
 # Get Encryption policy payload
 get_enc_policy_payload(){
   name=$1
@@ -343,31 +320,8 @@ get_tenant_endpoint_payload(){
   echo "$tenant_endpoint_payload"
 }
 
-
-# Get full file payload response
-get_full_file_policy_response(){
-  full_file_policy_payload=$(jq -n \
-                --arg name "$1" \
-                --arg endpoint "$2" \
-                --arg operation "$3" \
-                --arg encryption  "$4" \
-                --arg file  "$5" \
-                '{
-                  "name": $name,
-                  "endpoints":[{"id": $endpoint}],
-                  "httpResponseSettings": {
-                    "operation": $operation,
-                    "fullFileEncPolicy": {"id": $encryption }
-                  },
-                  "matchConditionList":[
-                    {"headers":[],"queryParams":[],"files":[$file],"precedence":"10"}]
-                }')
-
-  echo "$full_file_policy_payload"
-}
-
 # Get full file payload request
-get_full_file_policy_request(){
+get_full_file_policy_payload(){
   full_file_policy_payload=$(jq -n \
                 --arg name "$1" \
                 --arg endpoint "$2" \
@@ -389,57 +343,19 @@ get_full_file_policy_request(){
 }
 
 # Get field level payload response
-get_field_policy_response(){
+get_field_policy_payload(){
   field_policy_payload=$(jq -n \
                 --arg name "$1" \
                 --arg endpoint "$2" \
                 --arg operation "$3" \
-                --arg data_source  "$4" \
-                --arg ccn  "$5" \
-                --arg file  "$6" \
-                '{
-                  "name": $name,
-                  "endpoints":[{"id": $endpoint}],
-                  "httpResponseSettings": {
-                    "operation": $operation,
-                    "dataSource": { "id": $data_source},
-                    "fieldLevelPolicies":[
-                      {
-                        "encryptionPolicy":  {"id": $ccn},
-                        "field":"ccn",
-                        "fieldIdentifierType":"COLUMN_NAME"
-                      }
-                    ]
-                  },
-                  "matchConditionList":[
-                    {"headers":[],"queryParams":[],"files":[$file],"precedence":"10"}]
-                }')
-
-  echo "$field_policy_payload"
-}
-
-# Get field level payload response
-get_field_policy_request(){
-  field_policy_payload=$(jq -n \
-                --arg name "$1" \
-                --arg endpoint "$2" \
-                --arg operation "$3" \
-                --arg data_source  "$4" \
-                --arg ccn  "$5" \
-                --arg file  "$6" \
+                --arg data_container  "$4" \
+                --arg file  "$5" \
                 '{
                   "name": $name,
                   "endpoints":[{"id": $endpoint}],
                   "httpRequestSettings": {
                     "operation": $operation,
-                    "dataSource": { "id": $data_source},
-                    "fieldLevelPolicies":[
-                      {
-                        "encryptionPolicy":  {"id": $ccn},
-                        "field":"ccn",
-                        "fieldIdentifierType":"COLUMN_NAME"
-                      }
-                    ]
+                    "dataContainer": { "id": $data_container},
                   },
                   "matchConditionList":[
                     {"headers":[],"queryParams":[],"files":[$file],"precedence":"10"}]
@@ -473,56 +389,6 @@ get_full_file_rbac(){
                       {
                         "accessGroup":{"id": $encrypt },
                         "fileLevelPermissionAction":{"permissions":["ENCRYPT","WRITE"],"action":"ALLOW"}
-                      }
-                    ]
-                }')
-
-  echo "$full_file_policy_payload"
-}
-
-
-# Get full file rbac
-get_field_rbac(){
-  full_file_policy_payload=$(jq -n \
-                --arg name "$1" \
-                --arg data_source "$2" \
-                --arg file  "$3" \
-                --arg encrypt_decrypt "$4" \
-                --arg decrypt "$5" \
-                --arg encrypt  "$6" \
-                '{
-                    "name": $name,
-                    "resourceType":"FILE",
-                    "hasFieldLevelPolicy":true,
-                    "dataSource": {"id": $data_source },
-                    "resources":[$file],
-                    "permissions":[
-                    {
-                      "accessGroup": {"id": $encrypt_decrypt },
-                      "fileLevelPermissionAction":{"permissions":["DECRYPT","ENCRYPT","READ","WRITE"],"action":"ALLOW"},
-                      "fieldLevelAccessPolicies":[
-                        {"field":"name","fieldIdentifierType":"COLUMN_NAME","permissionAction":{"permissions":["DECRYPT","ENCRYPT","READ","WRITE"],"action":"ALLOW"}},
-                        {"field":"ssn","fieldIdentifierType":"COLUMN_NAME","permissionAction":{"permissions":["DECRYPT","ENCRYPT","READ","WRITE"],"action":"ALLOW"}}
-                      ],
-                      "fieldLevelAccessControlType":"FIELD"
-                    },
-                    {
-                      "accessGroup":{"id": $decrypt },
-                      "fileLevelPermissionAction":{"permissions":["DECRYPT","READ"],"action":"ALLOW"},
-                      "fieldLevelAccessPolicies":[
-                        {"field":"name","fieldIdentifierType":"COLUMN_NAME","permissionAction":{"permissions":["DECRYPT","READ"],"action":"ALLOW"}},
-                        {"field":"ssn","fieldIdentifierType":"COLUMN_NAME","permissionAction":{"permissions":["DECRYPT","READ"],"action":"ALLOW"}}
-                      ],
-                      "fieldLevelAccessControlType":"FIELD"
-                      },
-                      {
-                        "accessGroup":{"id": $encrypt },
-                        "fileLevelPermissionAction":{"permissions":["ENCRYPT","WRITE"],"action":"ALLOW"},
-                        "fieldLevelAccessPolicies":[
-                          {"field":"name","fieldIdentifierType":"COLUMN_NAME","permissionAction":{"permissions":["ENCRYPT","WRITE"],"action":"ALLOW"}},
-                          {"field":"ssn","fieldIdentifierType":"COLUMN_NAME","permissionAction":{"permissions":["ENCRYPT","WRITE"],"action":"ALLOW"}}
-                        ],
-                        "fieldLevelAccessControlType":"FIELD"
                       }
                     ]
                 }')
@@ -616,6 +482,100 @@ get_registration_payload(){
 
   echo "$registration_payload"
 }
+
+# Get entity group payload response
+get_entity_group_payload(){
+  entity_group_payload=$(jq -n \
+                --arg name "$1" \
+                --arg encryption_policy_id "$2" \
+                '{
+                  "name": ($name + "-group"),
+                  "piiEntities":[
+                  {
+                      "entityType": $name,
+                      "dataType":"STRING",
+                      "encryptionPolicy":
+                      {
+                        "id": $encryption_policy_id
+                      }
+                  }
+                  ]
+                }')
+
+  echo "$entity_group_payload"
+}
+
+# Get data container csv payload
+get_data_container_csv_payload(){
+  data_container_payload=$(jq -n \
+                --arg name "$1" \
+                --arg field "$2" \
+                --arg entity_group_id "$3" \
+                '{
+                  "name": ($name + "-csv-container"),
+                  "type":"CSV",
+                  "piiEntitiesGroup":
+                  { "id": $entity_group_id },
+                  "csvPayload":
+                  {
+                    "header": true,
+                    "standardDelimiter": "COMMA",
+                    "encoding":"UTF_8",
+                    "columnNames":[
+                      {
+                        "name": $field,
+                        "fieldConfig":
+                        {
+                          "type":"SIMPLE",
+                          "simpleFieldConfig":
+                          {
+                            "dataType":"STRING",
+                            "dynamicDetection":false,
+                            "entityType": $name
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }')
+
+  echo "$data_container_payload"
+}
+
+# Get data container payload response
+get_data_container_json_payload(){
+  data_container_payload=$(jq -n \
+                --arg name "$1" \
+                --arg field "$2" \
+                --arg entity_group_id "$3" \
+                '{
+                  "name": ($name + "-json-container"),
+                  "type":"JSON",
+                  "piiEntitiesGroup":
+                  { "id": $entity_group_id },
+                  "jsonPayload":
+                  {
+                    "fieldLocations":[
+                    {
+                      "location": $field,
+                      "fieldConfig":
+                      {
+                        "type":"SIMPLE",
+                        "simpleFieldConfig":
+                        {
+                          "dataType":"STRING",
+                          "dynamicDetection":false,
+                          "entityType":$name
+                        }
+                      }
+                    }]
+                  }
+                }')
+
+  echo "$data_container_payload"
+}
+
+
 
 # Function to check if the BM Data Proxy service is up and running
 check_application(){
@@ -750,7 +710,7 @@ configure_cle_data_proxy(){
     export "SYNC_ID=$cle_syncId"
   fi
 
-  add_endpoint_dpp_rbac_deploy false $dp_cle_id
+  add_endpoint_dpp_deploy false $dp_cle_id
 }
 
 ################## Configuration for RLE api service ##################
@@ -818,11 +778,11 @@ configure_rle_data_proxy(){
       export "SYNC_ID=$rle_syncId"
     fi
 
-    add_endpoint_dpp_rbac_deploy true $dp_rle_id
+    add_endpoint_dpp_deploy true $dp_rle_id
 }
 
 ######## ADD ENDPOINT, DPP,  DEPLOY ###########
-add_endpoint_dpp_rbac_deploy(){
+add_endpoint_dpp_deploy(){
     rle=$1
     dp_id=$2
 
@@ -858,7 +818,7 @@ add_endpoint_dpp_rbac_deploy(){
 
   # Add Data Policies
   # read full file
-  full_file_read_policy=$(get_full_file_policy_response "dp-full-file-read" "$s3_endpoint_id"  "DECRYPT" "$aes_random_policy_id" "$full_file_name")
+  full_file_read_policy=$(get_full_file_policy_payload "dp-full-file-read" "$s3_endpoint_id"  "DECRYPT" "$aes_random_policy_id" "$full_file_name")
   full_file_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_read_policy" "id")
   if [ "full_file_read_policy_id" == "error" ]; then
     echo "DPP Read Full failed. Exiting script." >&2
@@ -868,7 +828,7 @@ add_endpoint_dpp_rbac_deploy(){
   fi
 
   # write full file
-  full_file_write_policy=$(get_full_file_policy_request "dp-full-file-write" "$s3_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "$full_file_name")
+  full_file_write_policy=$(get_full_file_policy_payload "dp-full-file-write" "$s3_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "$full_file_name")
   full_file_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_write_policy" "id")
   if [ "$full_file_write_policy_id" == "error" ]; then
     echo "DPP Write Full failed. Exiting script." >&2
@@ -877,25 +837,74 @@ add_endpoint_dpp_rbac_deploy(){
     echo "DPP Write Full ID: $full_file_write_policy_id" >&2
   fi
 
-#   # field level read
-#   field_read_policy=$(get_field_policy_response "dp-field-read" "$s3_endpoint_id"  "DECRYPT" "$data_source_id"  "$fpe_ccn_policy_id" "$csv_file_name")
-#   field_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_read_policy" "id")
-#   if [ "full_file_read_policy_id" == "error" ]; then
-#     echo "DPP Read Field failed. Exiting script." >&2
-#     exit 1
-#   else
-#     echo "DPP Read Field ID: $field_read_policy_id" >&2
-#   fi
-#
-#  #field level write
-#  field_write_policy=$(get_field_policy_request "dp-field-write" "$s3_endpoint_id"  "ENCRYPT" "$data_source_id" "$fpe_ccn_policy_id" "$csv_file_name")
-#  field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_write_policy" "id")
-#  if [ "$field_write_policy_id" == "error" ]; then
-#    echo "DPP Write Filed failed. Exiting script." >&2
-#    exit 1
-#  else
-#    echo "DPP Write Field ID: $field_write_policy_id" >&2
-#  fi
+  # entity group
+  cc_entity_group_payload=$(get_entity_group_payload "credit-card" "$fpe_ccn_policy_id")
+  cc_entity_group_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/pii-entities-group" "$cc_entity_group_payload" "id")
+  if [ "$cc_entity_group_id" == "error" ]; then
+    echo "Entity Group Creation failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Entity Group ID: $cc_entity_group_id" >&2
+  fi
+
+  csv_data_container_payload=$(get_data_container_csv_payload "credit-card" "ccn" "$cc_entity_group_id")
+  csv_data_container_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-containers" "$csv_data_container_payload" "id")
+  if [ "$csv_data_container_id" == "error" ]; then
+    echo "CSV Data Container Creation failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CSV Data Container ID: $csv_data_container_id" >&2
+  fi
+
+   # field level read
+   field_read_policy=$(get_field_policy_payload "dp-csv-field-read" "$s3_endpoint_id"  "DECRYPT" "$csv_data_container_id" "$csv_file_name")
+   field_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_read_policy" "id")
+   if [ "$full_file_read_policy_id" == "error" ]; then
+     echo "DPP CSV Read Field failed. Exiting script." >&2
+     exit 1
+   else
+     echo "DPP CSV  Read Field ID: $field_read_policy_id" >&2
+   fi
+
+  #field level write
+  field_write_policy=$(get_field_policy_payload "dp-csv-field-write" "$s3_endpoint_id"  "ENCRYPT" "$csv_data_container_id" "$csv_file_name")
+  field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_write_policy" "id")
+  if [ "$field_write_policy_id" == "error" ]; then
+    echo "DPP CSV Write Filed failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DPP CSV Write Field ID: $field_write_policy_id" >&2
+  fi
+
+  json_data_container_payload=$(get_data_container_json_payload "credit-card" "ccn" "$cc_entity_group_id")
+  json_data_container_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-containers" "$json_data_container_payload" "id")
+  if [ "$json_data_container_id" == "error" ]; then
+    echo "JSON Data Container Creation failed. Exiting script." >&2
+    exit 1
+  else
+    echo "JSON Data Container ID: $json_data_container_id" >&2
+  fi
+
+   # field level read
+   json_field_read_policy=$(get_field_policy_payload "dp-json-field-read" "$s3_endpoint_id"  "DECRYPT" "$json_data_container_id" "$json_file_name")
+   json_field_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$json_field_read_policy" "id")
+   if [ "$json_field_read_policy_id" == "error" ]; then
+     echo "DPP JSON Read Field failed. Exiting script." >&2
+     exit 1
+     exit 1
+   else
+     echo "DPP JSON  Read Field ID: $$json_field_read_policy_id" >&2
+   fi
+
+  #field level write
+  json_field_write_policy=$(get_field_policy_payload "dp-json-field-write" "$s3_endpoint_id"  "ENCRYPT" "$json_data_container_id" "$json_file_name")
+  json_field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$json_field_write_policy" "id")
+  if [ "$json_field_write_policy_id" == "error" ]; then
+    echo "DPP JSON Write Filed failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DPP JSON Write Field ID: $json_field_write_policy_id" >&2
+  fi
 
   deploy_payload=$(get_deploy_payload "deploy-cle")
   deploy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/deployments" "$deploy_payload" "id")
@@ -1023,17 +1032,6 @@ configure_bm(){
   else
     echo "Decrypt AG: $decrypt_ag_id" >&2
   fi
-
-  # dp data source
-  data_source_payload=$(get_data_source_payload "data_source")
-  data_source_id=$(send_post_request "$jwt_token" "$data_source_url" "$data_source_payload" "id")
-  if [ "$data_source_id" == "error" ]; then
-    echo "Data Source failed. Exiting script." >&2
-    exit 1
-  else
-    echo "Data Source: $data_source_id" >&2
-  fi
-
 }
 
 # Execute workflow based on execute_workflow variable.

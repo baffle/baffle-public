@@ -1,0 +1,7 @@
+Customer name: Jake Smith
+Address: 123 W Main St, St Louis, MO
+Last Service Date: 9/18/2024
+ccn 5108-1111-1111-1111
+Description of service: Owner of a 2021 Kia Stinger brought in for recall # 234-537563-475.  Potential safety hazard.  Oil pipe to left turbo booster is susceptible to overheating and breaking.  Oil can be released and catch fire.  
+Price: Free to customer.  Bill Kia $2,345.
+
