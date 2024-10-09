@@ -321,7 +321,7 @@ get_tenant_endpoint_payload(){
 }
 
 # Get full file payload request
-get_full_file_policy_payload(){
+get_full_file_read_policy_payload(){
   full_file_policy_payload=$(jq -n \
                 --arg name "$1" \
                 --arg endpoint "$2" \
@@ -331,7 +331,7 @@ get_full_file_policy_payload(){
                 '{
                   "name": $name,
                   "endpoints":[{"id": $endpoint}],
-                  "httpRequestSettings": {
+                  "httpResponseSettings": {
                     "operation": $operation,
                     "fullFileEncPolicy": {"id": $encryption }
                   },
@@ -343,7 +343,7 @@ get_full_file_policy_payload(){
 }
 
 # Get full file linked payload request
-get_full_file_linked_policy_payload(){
+get_full_file_write_linked_policy_payload(){
   full_file_policy_payload=$(jq -n \
                 --arg name "$1" \
                 --arg endpoint "$2" \
@@ -367,7 +367,7 @@ get_full_file_linked_policy_payload(){
 }
 
 # Get field level payload response
-get_field_policy_payload(){
+get_field_read_policy_payload(){
   field_policy_payload=$(jq -n \
                 --arg name "$1" \
                 --arg endpoint "$2" \
@@ -377,7 +377,7 @@ get_field_policy_payload(){
                 '{
                   "name": $name,
                   "endpoints":[{"id": $endpoint}],
-                  "httpRequestSettings": {
+                  "httpResponseSettings": {
                     "operation": $operation,
                     "dataContainer": { "id": $data_container},
                   },
@@ -389,7 +389,7 @@ get_field_policy_payload(){
 }
 
 # Get field level linked payload response
-get_field_linked_policy_payload(){
+get_field_write_linked_policy_payload(){
   field_policy_payload=$(jq -n \
                 --arg name "$1" \
                 --arg endpoint "$2" \
@@ -866,7 +866,7 @@ add_endpoint_dpp_deploy(){
 
   # Add Data Policies
   # read full file
-  full_file_read_policy=$(get_full_file_policy_payload "dp-full-file-read" "$s3_endpoint_id"  "DECRYPT" "$aes_random_policy_id" "$full_file_name")
+  full_file_read_policy=$(get_full_file_read_policy_payload "dp-full-file-read" "$s3_endpoint_id"  "DECRYPT" "$aes_random_policy_id" "$full_file_name")
   full_file_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_read_policy" "id")
   if [ "full_file_read_policy_id" == "error" ]; then
     echo "DPP Read Full failed. Exiting script." >&2
@@ -876,7 +876,7 @@ add_endpoint_dpp_deploy(){
   fi
 
   # write full file
-  full_file_write_policy=$(get_full_file_linked_policy_payload "dp-full-file-write" "$s3_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "$full_file_name" "$full_file_read_policy_id")
+  full_file_write_policy=$(get_full_file_write_linked_policy_payload "dp-full-file-write" "$s3_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "$full_file_name" "$full_file_read_policy_id")
   full_file_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_write_policy" "id")
   if [ "$full_file_write_policy_id" == "error" ]; then
     echo "DPP Write Full failed. Exiting script." >&2
@@ -905,7 +905,7 @@ add_endpoint_dpp_deploy(){
   fi
 
    # field level read
-   field_read_policy=$(get_field_policy_payload "dp-csv-field-read" "$s3_endpoint_id"  "DECRYPT" "$csv_data_container_id" "$csv_file_name")
+   field_read_policy=$(get_field_read_policy_payload "dp-csv-field-read" "$s3_endpoint_id"  "DECRYPT" "$csv_data_container_id" "$csv_file_name")
    field_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_read_policy" "id")
    if [ "$full_file_read_policy_id" == "error" ]; then
      echo "DPP CSV Read Field failed. Exiting script." >&2
@@ -915,7 +915,7 @@ add_endpoint_dpp_deploy(){
    fi
 
   #field level write
-  field_write_policy=$(get_field_linked_policy_payload "dp-csv-field-write" "$s3_endpoint_id"  "ENCRYPT" "$csv_data_container_id" "$csv_file_name" "$field_read_policy_id")
+  field_write_policy=$(get_field_write_linked_policy_payload "dp-csv-field-write" "$s3_endpoint_id"  "ENCRYPT" "$csv_data_container_id" "$csv_file_name" "$field_read_policy_id")
   field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_write_policy" "id")
   if [ "$field_write_policy_id" == "error" ]; then
     echo "DPP CSV Write Filed failed. Exiting script." >&2
@@ -934,18 +934,18 @@ add_endpoint_dpp_deploy(){
   fi
 
    # field level read
-   json_field_read_policy=$(get_field_policy_payload "dp-json-field-read" "$s3_endpoint_id"  "DECRYPT" "$json_data_container_id" "$json_file_name")
+   json_field_read_policy=$(get_field_read_policy_payload "dp-json-field-read" "$s3_endpoint_id"  "DECRYPT" "$json_data_container_id" "$json_file_name")
    json_field_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$json_field_read_policy" "id")
    if [ "$json_field_read_policy_id" == "error" ]; then
      echo "DPP JSON Read Field failed. Exiting script." >&2
      exit 1
      exit 1
    else
-     echo "DPP JSON  Read Field ID: $$json_field_read_policy_id" >&2
+     echo "DPP JSON  Read Field ID: $json_field_read_policy_id" >&2
    fi
 
   #field level write
-  json_field_write_policy=$(get_field_linked_policy_payload "dp-json-field-write" "$s3_endpoint_id"  "ENCRYPT" "$json_data_container_id" "$json_file_name" "$json_field_read_policy_id")
+  json_field_write_policy=$(get_field_write_linked_policy_payload "dp-json-field-write" "$s3_endpoint_id"  "ENCRYPT" "$json_data_container_id" "$json_file_name" "$json_field_read_policy_id")
   json_field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$json_field_write_policy" "id")
   if [ "$json_field_write_policy_id" == "error" ]; then
     echo "DPP JSON Write Filed failed. Exiting script." >&2
