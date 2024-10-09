@@ -37,10 +37,10 @@ fpe_cc_url="$base_url/api/v2/encryption-policies/FPE_CREDIT_CARD"
 user_group_url="$base_url/api/v2/data-access-control/user-groups"
 tenant_url="$base_url/api/v2/key-management/tenants"
 #Migration
-migration_image=baffle-migration-v4:Release-Baffle.2.9.3.3
+migration_image=baffle-migration-v4:Release-Baffle.2.9.3.7
 # Shield Hosts
-postgres_shield_image=baffle-shield-postgresql-v4:Release-Baffle.2.9.3.3
-txn_logger_image=baffle-txn-logger:Release-Baffle.2.9.3.3
+postgres_shield_image=baffle-shield-postgresql-v4:Release-Baffle.2.9.3.7
+txn_logger_image=baffle-txn-logger:Release-Baffle.2.9.3.7
 shield_static_mask_folder="Baffle-Shield-Postgresql-Static-Mask"
 shield_static_mask_host="shield_static_mask"
 shield_static_mask_port=5432
