@@ -2,11 +2,11 @@
   "name": "John Doe",
   "age": 30,
   "isStudent": false,
-  "ccn": 4837-1111-1111-1111
+  "ccn": "4837-1111-1111-1111",
   "hobbies": ["reading", "traveling", "coding"],
   "address": {
     "street": "123 Main St",
-    "city": “Los Angeles”
+    "city": "Los Angeles",
     "state": "CA"
   }
 }

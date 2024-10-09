@@ -342,6 +342,30 @@ get_full_file_policy_payload(){
   echo "$full_file_policy_payload"
 }
 
+# Get full file linked payload request
+get_full_file_linked_policy_payload(){
+  full_file_policy_payload=$(jq -n \
+                --arg name "$1" \
+                --arg endpoint "$2" \
+                --arg operation "$3" \
+                --arg encryption  "$4" \
+                --arg file  "$5" \
+                --arg linkedDPP "$6" \
+                '{
+                  "name": $name,
+                  "linkedDppId": $linkedDPP,
+                  "endpoints":[{"id": $endpoint}],
+                  "httpRequestSettings": {
+                    "operation": $operation,
+                    "fullFileEncPolicy": {"id": $encryption }
+                  },
+                  "matchConditionList":[
+                    {"headers":[],"queryParams":[],"files":[$file],"precedence":"10"}]
+                }')
+
+  echo "$full_file_policy_payload"
+}
+
 # Get field level payload response
 get_field_policy_payload(){
   field_policy_payload=$(jq -n \
@@ -352,6 +376,30 @@ get_field_policy_payload(){
                 --arg file  "$5" \
                 '{
                   "name": $name,
+                  "endpoints":[{"id": $endpoint}],
+                  "httpRequestSettings": {
+                    "operation": $operation,
+                    "dataContainer": { "id": $data_container},
+                  },
+                  "matchConditionList":[
+                    {"headers":[],"queryParams":[],"files":[$file],"precedence":"10"}]
+                }')
+
+  echo "$field_policy_payload"
+}
+
+# Get field level linked payload response
+get_field_linked_policy_payload(){
+  field_policy_payload=$(jq -n \
+                --arg name "$1" \
+                --arg endpoint "$2" \
+                --arg operation "$3" \
+                --arg data_container  "$4" \
+                --arg file  "$5" \
+                --arg linkedDPP "$6" \
+                '{
+                  "name": $name,
+                  "linkedDppId": $linkedDPP,
                   "endpoints":[{"id": $endpoint}],
                   "httpRequestSettings": {
                     "operation": $operation,
@@ -828,7 +876,7 @@ add_endpoint_dpp_deploy(){
   fi
 
   # write full file
-  full_file_write_policy=$(get_full_file_policy_payload "dp-full-file-write" "$s3_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "$full_file_name")
+  full_file_write_policy=$(get_full_file_linked_policy_payload "dp-full-file-write" "$s3_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "$full_file_name" "$full_file_read_policy_id")
   full_file_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_write_policy" "id")
   if [ "$full_file_write_policy_id" == "error" ]; then
     echo "DPP Write Full failed. Exiting script." >&2
@@ -867,7 +915,7 @@ add_endpoint_dpp_deploy(){
    fi
 
   #field level write
-  field_write_policy=$(get_field_policy_payload "dp-csv-field-write" "$s3_endpoint_id"  "ENCRYPT" "$csv_data_container_id" "$csv_file_name")
+  field_write_policy=$(get_field_linked_policy_payload "dp-csv-field-write" "$s3_endpoint_id"  "ENCRYPT" "$csv_data_container_id" "$csv_file_name" "$field_read_policy_id")
   field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_write_policy" "id")
   if [ "$field_write_policy_id" == "error" ]; then
     echo "DPP CSV Write Filed failed. Exiting script." >&2
@@ -897,7 +945,7 @@ add_endpoint_dpp_deploy(){
    fi
 
   #field level write
-  json_field_write_policy=$(get_field_policy_payload "dp-json-field-write" "$s3_endpoint_id"  "ENCRYPT" "$json_data_container_id" "$json_file_name")
+  json_field_write_policy=$(get_field_linked_policy_payload "dp-json-field-write" "$s3_endpoint_id"  "ENCRYPT" "$json_data_container_id" "$json_file_name" "$json_field_read_policy_id")
   json_field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$json_field_write_policy" "id")
   if [ "$json_field_write_policy_id" == "error" ]; then
     echo "DPP JSON Write Filed failed. Exiting script." >&2
