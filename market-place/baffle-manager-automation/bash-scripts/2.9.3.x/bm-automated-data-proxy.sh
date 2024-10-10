@@ -503,7 +503,8 @@ get_dp_rle_payload(){
                           },
                           "encryption": {
                             "type":"MULTI_TENANCY",
-                            "tenantDetermination":"HEADER"
+                            "tenantDetermination":"URI",
+                            "urlPattern":".*miro/(tenant\\d+)-(.*).(.*)"
                           },
                           "accessControl":{
                             "enabled":false
