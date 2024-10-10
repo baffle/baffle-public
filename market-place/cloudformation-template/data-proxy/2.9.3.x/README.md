@@ -56,88 +56,141 @@ Please use the curl command to check the status (update the hostname with your h
 
 1. Upload a file
 ```bash
-aws s3 cp kia.txt s3://bucket/kia.txt --endpoint-url=https://mys3.com --no-verify-ssl
+aws s3 cp kia.txt s3://bucket/kia.txt --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
-2. Download a file
+2. Download a file and verify it is encrypted 
 ```bash
-aws s3 cp s3://bucket/kia.txt  downloaded_kia.txt --endpoint-url=https://mys3.com --no-verify-ssl
+aws s3 cp s3://bucket/kia.txt  downloaded_enc_kia.txt 
 ```
-
+3. Download a file and verify it can be  decrypted
+```bash
+aws s3 cp s3://bucket/kia.txt  downloaded_kia.txt --endpoint-url=https://IP:8444 --no-verify-ssl
+```
 #### Field level file
 
 1. Upload a csv
 ```bash
-aws s3 cp customers.csv --endpoint-url=https://mys3.com --no-verify-ssl
+aws s3 cp customers.csv --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-2. Download a csv
+2. Download a csv and verify ccn field is encrypted
 ```bash
-aws s3 cp s3://bucket/customers.csv  customers.csv --endpoint-url=https://mys3.com --no-verify-ssl
+aws s3 cp s3://bucket/customers.csv  downloaded_enc_customers.csv
 ```
-
-3. Upload a json
+3. Download a csv and verify ccn field is decrypted
 ```bash
-aws s3 cp john.json s3://bucket/john.json --endpoint-url=https://mys3.com --no-verify-ssl
+aws s3 cp s3://bucket/customers.csv  downloaded_customers.csv --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-4. Download a json
+4. Upload a json
 ```bash
-aws s3 cp s3://bucket/john.json  downloaded_john.json --endpoint-url=https://mys3.com --no-verify-ssl
+aws s3 cp john.json s3://bucket/john.json --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
+5. Download a json and verify ccn field is encrypted
+```bash
+aws s3 cp s3://bucket/john.json  downloaded_enc_john.json 
+```
+
+6. Download a csv and verify ccn field is decrypted
+```bash
+aws s3 cp s3://bucket/john.json  downloaded_john.json  --endpoint-url=https://IP:8444 --no-verify-ssl
+```
 
 ### BYOK
 
 #### Full file
 
-1. Upload with encrypt role -> success
+1. Upload a file for Tenant T-1001
 ```bash
-curl -i -k  -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTIxLjA2ODYyMywiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdCJdfQ.77aDWccA7ReGXN5xTnK6Ogk0MBwZ8AuKnGc8NyufTws' \
---upload-file bill.txt 'https://{hostname}:8444/api/filesvc/write/bill.txt'
+aws s3 cp kia.txt s3://bucket/T-1001-kia.txt  --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-2. Upload with decrypt role -> error
+2. Upload a file for Tenant T-2002
 ```bash
-curl -i -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
---upload-file bill.txt 'https://{hostname}:8444/api/filesvc/write/bill.txt'
+aws s3 cp kia.txt s3://bucket/T-2002-kia.txt  --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-3. Download with decrypt role -> success
+3. Download  encrypted file for tenant T-1001
 ```bash
-curl -s -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
-'https://{hostname}:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
+aws s3 s3://bucket/T-1001-kia.txt enc-T-1001-kia.txt
 ```
 
-4. Decrypt with encrypt-decrypt role -> success
+4. Download  encrypted file for tenant T-2002 and verify files are different 
 ```bash
-curl -s -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE0MTYwLjY5ODQ1NiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdC1kZWNyeXB0Il19.WvO027v6qbIh26berMrtVd9bGsbEpcxteEt5Vryic0c' \
-'https://{hostname}:8444/api/filesvc/read/bill.txt'  -o download-bill.txt
+aws s3 cp s3://bucket/T-2002-kia.txt enc-T-2002-kia.txt
+```
+
+5. Download  decrypted file for tenant T-1001
+```bash
+aws s3 s3://bucket/T-1001-kia.txt T-1001-kia.txt --endpoint-url=https://IP:8444 --no-verify-ssl
+```
+
+6. Download decrypted file for tenant T-2002
+```bash
+aws s3 cp s3://bucket/T-2002-kia.txt T-2002-kia.txt --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
 #### Field level file
 
-1. Upload with encrypt role -> success
+1. Upload a csv file for Tenant T-1001
 ```bash
-curl -i -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTIxLjA2ODYyMywiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdCJdfQ.77aDWccA7ReGXN5xTnK6Ogk0MBwZ8AuKnGc8NyufTws' \
---upload-file employee.csv 'https://{hostname}:8444/api/filesvc/write/employee.csv'
+aws s3 cp customers.csv  s3://bucket/T-1001-customers.csv   --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-2. Upload with decrypt role -> error
+2. Upload a csv file for Tenant T-2002
 ```bash
-curl -i -k  -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
---upload-file employee.csv 'https://{hostname}:8444/api/filesvc/write/employee.csv'
+aws s3 cp customers.csv  s3://bucket/T-2002-customers.csv   --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-3. Download with decrypt role -> success
+3. Download encrypted  csv file for tenant T-1001 and verify ccn field is encrypted
 ```bash
-curl -s -k -H 'x-baffle-tenant: T-1001'  -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE1MTY5LjY1NjEzNiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZGVjcnlwdCJdfQ.WfEXqH1ufh_7Z-FDuD1_RUXzlADTHe_skbOAzOKshEE' \
-'https://{hostname}:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
+aws s3 s3://bucket/T-1001-customers.csv  enc-T-1001-customers.csv 
 ```
 
-4. Decrypt with encrypt-decrypt role -> success
+4. Download encrypted  csv file for tenant T-1001 and verify ccn field is encrypted with different key
 ```bash
-curl -s -k -H 'x-baffle-tenant: T-1001' -H 'Authorization:Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJiYWZhcGkuYmFmZmxlLmlvIiwiaWF0IjoxNzE1ODE0MTYwLjY5ODQ1NiwiYXVkIjoiYmFmYXBpLmJhZmZsZS5pbyIsInN1YiI6ImJhZmFwaS5iYWZmbGUuaW8iLCJnaXZlbk5hbWUiOiJCYWZmbGUiLCJzdXJuYW1lIjoiQWRtaW4iLCJlbWFpbCI6ImFkbWluQGFwaXVzZXIuY29tIiwicm9sZXMiOlsiZW5jcnlwdC1kZWNyeXB0Il19.WvO027v6qbIh26berMrtVd9bGsbEpcxteEt5Vryic0c' \
-'https://{hostname}:8444/api/filesvc/read/employee.csv'  -o download-employee.csv
+aws s3 cp s3://bucket/T-2002-customers.csv  enc-T-2002-customers.csv 
+```
+
+5. Download decrypted file for tenant T-1001 and verify ccn 
+```bash
+aws s3 s3://bucket/T-1001-customers.csv  T-1001-customers.csv  --endpoint-url=https://IP:8444 --no-verify-ssl
+```
+
+6. Download decrypted file for tenant T-2002 and verify ccn
+```bash
+aws s3 cp s3://bucket/T-2002-customers.csv  T-2002-customers.csv  --endpoint-url=https://IP:8444 --no-verify-ssl
+```
+
+7. Upload a json file for Tenant T-1001
+```bash
+aws s3 cp john.json  s3://bucket/T-1001-john.json   --endpoint-url=https://IP:8444 --no-verify-ssl
+```
+
+8. Upload a json file for Tenant T-2002
+```bash
+aws s3 cp john.json  s3://bucket/T-2002-john.json   --endpoint-url=https://IP:8444 --no-verify-ssl
+```
+
+9. Download encrypted  json file for tenant T-1001 and verify ccn field is encrypted
+```bash
+aws s3 s3://bucket/T-1001-john.json  enc-T-1001-john.json 
+```
+
+10. Download encrypted  json file for tenant T-1001 and verify ccn field is encrypted with different key
+```bash
+aws s3 cp s3://bucket/T-2002-john.json  enc-T-2002-john.json 
+```
+
+11. Download decrypted file for tenant T-1001 and verify ccn
+```bash
+aws s3 s3://bucket/T-1001-john.json  T-1001-john.json  --endpoint-url=https://IP:8444 --no-verify-ssl
+```
+
+12. Download decrypted file for tenant T-2002 and verify ccn
+```bash
+aws s3 cp s3://bucket/T-2002-john.json  T-2002-john.json  --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
 ### 3. Swagger:

@@ -298,26 +298,26 @@ get_permission_payload(){
   echo "$permission_payload"
 }
 
-# Get Tenant endpoint payload
-get_tenant_endpoint_payload(){
-  tenant_endpoint_payload=$(jq -n \
+# Get Tenant group endpoint payload
+get_tenant_group_payload(){
+  tenant_group_payload=$(jq -n \
                 --arg name "$1" \
-                --arg tenant_id "$2" \
-                --arg read_endpoint "$3" \
-                --arg write_endpoint  "$4" \
+                --arg tenant_one_id "$2" \
+                --arg tenant_two_id "$3" \
+                --arg s3_endpoint "$4" \
                 '{
                   "name": $name,
-                  "serverConfiguration":"DEFAULT_SERVER",
-                  "tenant": {
-                     "id": $tenant_id
-                  },
+                  "serverConfiguration":"NEW_SERVER",
+                  "tenants": [
+                  { "id": $tenant_one_id },
+                  { "id": $tenant_two_id }
+                  ],
                   "endpoints":[
-                    {"id" : $read_endpoint},
-                    {"id" : $write_endpoint}
+                    {"id" : $s3_endpoint }
                   ]
                 }')
 
-  echo "$tenant_endpoint_payload"
+  echo "$tenant_group_payload"
 }
 
 # Get full file payload request
@@ -504,7 +504,7 @@ get_dp_rle_payload(){
                           "encryption": {
                             "type":"MULTI_TENANCY",
                             "tenantDetermination":"URI",
-                            "urlPattern":".*miro/(tenant\\d+)-(.*).(.*)"
+                            "urlPattern":".*/(T-\\d+)-(.*).(.*)"
                           },
                           "accessControl":{
                             "enabled":false
@@ -844,26 +844,21 @@ add_endpoint_dpp_deploy(){
         exit 1
     fi
 
-#   if [ $rle = true ]; then
-#     # add tenant endpoint
-#     add_tenant_1=$(get_tenant_endpoint_payload "Rle-Tenant-1-endpoint" "$rle_tenant1_id" "$s3_endpoint_id")
-#     add_tenant_1_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/tenants" "$add_tenant_1" "id")
-#     if [ "add_tenant_1_id" == "error" ]; then
-#       echo "Tenant 1 Add  Endpoint failed. Exiting script." >&2
-#       exit 1
-#     else
-#       echo "Tenant 1 Add  Endpoint ID: $add_tenant_1_id" >&2
-#     fi
-#
-#     add_tenant_2=$(get_tenant_endpoint_payload "Rle-Tenant-2-endpoint" "$rle_tenant2_id" "$s3_endpoint_id")
-#     add_tenant_2_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/tenants" "$add_tenant_2" "id")
-#     if [ "add_tenant_2_id" == "error" ]; then
-#       echo "Tenant Add failed. Exiting script." >&2
-#       exit 1
-#     else
-#       echo "Tenant Add ID: $add_tenant_2_id" >&2
-#     fi
-#   fi
+   if [ $rle = true ]; then
+     # add tenant endpoint
+     add_tenants_group=$(get_tenant_group_payload "Rle-Tenant-group" "$rle_tenant1_id" "$rle_tenant2_id" "$s3_endpoint_id")
+     add_tenants_group_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/tenants" "$add_tenants_group" "id")
+     if [ "$add_tenants_group_id" == "error" ]; then
+       echo "Tenant Group Addition failed. Exiting script." >&2
+       exit 1
+     else
+       echo "Tenant 1 Add  Endpoint ID: $add_tenants_group_id" >&2
+     fi
+
+     full_file_name="(T-\\d+)-kia.txt"
+     csv_file_name="(T-\\d+)-customers.csv"
+     json_file_name="(T-\\d+)-john.json"
+   fi
 
   # Add Data Policies
   # read full file
