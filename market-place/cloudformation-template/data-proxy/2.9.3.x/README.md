@@ -23,8 +23,9 @@ Once the template creates the stack it will output some value. The following are
 1. BaffleEC2SecurityGroup -  The Security Group that white list user IP
 2. BaffleManagerURL - The URL for Baffle Manager
 3. StackRegion	- The region where stack is deployed
-4. DataProxyHealthCheck - The URL for for Data Proxy health check
+4. DataProxyHealthCheck - The URL for Data Proxy health check
 5. DataProxyURL - The URL for Data Proxy
+6. DataProxyS3Bucket - The bucket where to store data. 
 
 
 #### * if the stack needed to be created on specific region and with specific profile, following needs to be passed on aws command
@@ -50,7 +51,7 @@ Please use the curl command to check the status (update the hostname with your h
 
 ### Standard Encryption
 
- All the file used are provided on
+ All the file used are provided on the files directory. bucket is DataProxyS3Bucket from stack output and IP is the ip of the EC2 instances.
 
 #### Full file
 
