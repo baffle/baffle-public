@@ -25,7 +25,6 @@ kek_url="$base_url/api/v2/key-management/keks"
 tenant_url="$base_url/api/v2/key-management/tenants"
 data_proxy_url="$base_url/api/v3/data-proxy/clusters"
 enc_policy_url="$base_url/api/v3/enc-policies"
-access_group_url="$base_url/api/v3/data-proxy/access-groups"
 
 full_file_name="kia.txt"
 csv_file_name="customers.csv"
@@ -263,39 +262,6 @@ get_tenant_enc_policy_payload(){
                 }')
 
   echo "$policy_payload"
-}
-
-# Get dp access group payload
-get_access_group_payload(){
-  name=$1
-  roles=$2
-  access_group_payload=$(jq -n \
-                --arg name "$name" \
-                --arg roles "$roles" \
-                '{
-                  "name": $name,
-                  "accessControlMethod":"ROLE",
-                  "roles": [$roles]
-                }')
-
-  echo "$access_group_payload"
-}
-
-# Get api permission payload
-get_permission_payload(){
-  name=$1
-  roles=$2
-  permissions=$3
-  permission_payload=$(jq -n \
-                --arg name "$name" \
-                --arg roles "$roles" \
-                '{
-                  "name": $name,
-                  "roles": [$roles],
-                  "permissions": '"$permissions"'
-                }')
-
-  echo "$permission_payload"
 }
 
 # Get Tenant group endpoint payload
@@ -675,8 +641,10 @@ extract_s3_endpoint_id() {
 
 
 
-start_data_proxy(){
+start_data_proxy_docker(){
+  all=$1
   port=8444
+  rle_port=8445
 
   aws_metadata_token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
   private_ip=$(curl -H "X-aws-ec2-metadata-token: $aws_metadata_token" http://169.254.169.254/latest/meta-data/local-ipv4)
@@ -686,8 +654,13 @@ start_data_proxy(){
   cd "/home/ec2-user/baffle-data-proxy"
 
   echo "Starting Data Proxy.." >&2
-  # Run docker compose
-  docker-compose up -d &
+
+ if [ $all = true ]; then
+    # Run docker compose
+    docker-compose -f docker-compose-all.yaml up -d &
+  else
+    docker-compose up -d &
+  fi
 
   # Check if port  is open
   counter=0
@@ -704,14 +677,33 @@ start_data_proxy(){
     echo "Port $port is not open after 5 minutes. Exiting script." >&2
     echo "error"
   fi
+
+ if [ $all = true ]; then
+    counter=0
+     while ! netstat -tuln | grep "$rle_port" && [ $counter -lt 10 ]; do
+       echo "Port $rle_port  for RLE is not open. Retrying in 30 seconds..." >&2
+       sleep 30
+       ((counter++))
+     done
+
+     if netstat -tuln | grep "$rle_port"; then
+       echo "Port $rle_port is open. Data Proxy  is up and running." >&2
+       echo "success"
+     elif [ $counter -eq 10 ]; then
+       echo "Port $rle_port for RLE is not open after 5 minutes. Exiting script." >&2
+       echo "error"
+     fi
+
+ fi
 }
 
 start_bm(){
   # change the current directory
-  cd /opt/manager
+  cd "/opt/manager"
   # Start the Baffle Manager service
   docker-compose up -d &
 }
+
 
 ################## Configuration for standard api service ##################
 configure_cle_data_proxy(){
@@ -720,7 +712,7 @@ configure_cle_data_proxy(){
   #create Encryption policy
   fpe_alphanum_policy=$(get_enc_policy_payload "fpe-alphanum" "FPE_ALPHANUM" "$aws_kms_id"  "$kek_id" "$dek_id")
   fpe_alphanum_policy_id=$(send_post_request "$jwt_token" "$enc_policy_url" "$fpe_alphanum_policy" "id")
-   if [ "fpe_alphanum_policy_id" == "error" ]; then
+   if [ "$fpe_alphanum_policy_id" == "error" ]; then
      echo "Adding FPE_ALPHANUM  failed. Exiting script." >&2
      exit 1
    else
@@ -729,7 +721,7 @@ configure_cle_data_proxy(){
 
    fpe_ccn_policy=$(get_enc_policy_payload "fpe-cc" "FPE_CREDIT_CARD" "$aws_kms_id"  "$kek_id" "$dek_id")
    fpe_ccn_policy_id=$(send_post_request "$jwt_token" "$enc_policy_url" "$fpe_ccn_policy" "id")
-    if [ "fpe_ccn_policy_id" == "error" ]; then
+    if [ "$fpe_ccn_policy_id" == "error" ]; then
       echo "Adding FPE_CC  failed. Exiting script." >&2
       exit 1
     else
@@ -738,13 +730,12 @@ configure_cle_data_proxy(){
 
   aes_random_policy=$(get_enc_policy_payload "aes-random" "AES_RANDOM" "$aws_kms_id"  "$kek_id" "$dek_id")
   aes_random_policy_id=$(send_post_request "$jwt_token" "$enc_policy_url" "$aes_random_policy" "id")
-  if [ "aes_random_policy_id" == "error" ]; then
+  if [ "$aes_random_policy_id" == "error" ]; then
     echo "Adding AES Random failed. Exiting script." >&2
     exit 1
   else
     echo "AES Random  added : $aes_random_policy_id" >&2
   fi
-
 
   dp_cle_payload=$(get_dp_cle_payload "cle-s3-proxy" "$aws_kms_id" "$kek_id" )
   # Enroll api service
@@ -764,30 +755,31 @@ configure_cle_data_proxy(){
 
 ################## Configuration for RLE api service ##################
 configure_rle_data_proxy(){
+  all=$1
   echo -e "\n#### Configuring RLE Data Proxy.... ####\n" >&2
 
   #create Encryption policy
-  fpe_alphanum_policy=$(get_tenant_enc_policy_payload "fpe-alphanum" "FPE_ALPHANUM")
+  fpe_alphanum_policy=$(get_tenant_enc_policy_payload "fpe-alphanum-rle" "FPE_ALPHANUM")
   fpe_alphanum_policy_id=$(send_post_request "$jwt_token" "$enc_policy_url" "$fpe_alphanum_policy" "id")
-   if [ "fpe_alphanum_policy_id" == "error" ]; then
+   if [ "$fpe_alphanum_policy_id" == "error" ]; then
      echo "Adding FPE_ALPHANUM  failed. Exiting script." >&2
      exit 1
    else
      echo "FPE_ALPHANUM added : $fpe_alphanum_policy_id" >&2
    fi
 
-   fpe_ccn_policy=$(get_tenant_enc_policy_payload "fpe-cc" "FPE_CREDIT_CARD")
+   fpe_ccn_policy=$(get_tenant_enc_policy_payload "fpe-cc-rle" "FPE_CREDIT_CARD")
    fpe_ccn_policy_id=$(send_post_request "$jwt_token" "$enc_policy_url" "$fpe_ccn_policy" "id")
-    if [ "fpe_ccn_policy_id" == "error" ]; then
+    if [ "$fpe_ccn_policy_id" == "error" ]; then
       echo "Adding FPE_CC  failed. Exiting script." >&2
       exit 1
     else
-      echo "FPE_CC added : $fpe_ccn_policy" >&2
+      echo "FPE_CC added : $fpe_ccn_policy_id" >&2
     fi
 
-    aes_random_policy=$(get_tenant_enc_policy_payload "aes_random" "AES_RANDOM")
+    aes_random_policy=$(get_tenant_enc_policy_payload "aes_random-rle" "AES_RANDOM")
     aes_random_policy_id=$(send_post_request "$jwt_token" "$enc_policy_url" "$aes_random_policy" "id")
-    if [ "aes_random_policy_id" == "error" ]; then
+    if [ "$aes_random_policy_id" == "error" ]; then
       echo "Adding AES RANDOM  failed. Exiting script." >&2
       exit 1
     else
@@ -804,36 +796,48 @@ configure_rle_data_proxy(){
       echo "RLE Tenant-1 ID: $rle_tenant1_id" >&2
     fi
 
-    # Enroll Tenant-2
-    rle_tenant2_payload=$(get_tenant_payload "Rle-Tenant-2" "T-2002" "$aws_kms_id" "$kek1_id" "T-rle-2002-dek")
-    rle_tenant2_id=$(send_post_request "$jwt_token" "$tenant_url" "$rle_tenant2_payload" "id")
-    if [ "$rle_tenant2_id" == "error" ]; then
-      echo "Tenant-2 enrollment failed. Exiting script." >&2
-      exit 1
-    else
-      echo "Tenant-2 ID: $rle_tenant2_id" >&2
-    fi
+  # Enroll Tenant-2
+  rle_tenant2_payload=$(get_tenant_payload "Rle-Tenant-2" "T-2002" "$aws_kms_id" "$kek1_id" "T-rle-2002-dek")
+  rle_tenant2_id=$(send_post_request "$jwt_token" "$tenant_url" "$rle_tenant2_payload" "id")
+  if [ "$rle_tenant2_id" == "error" ]; then
+    echo "RLE Tenant-2 enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "RLE Tenant-2 ID: $rle_tenant2_id" >&2
+  fi
 
-    dp_rle_payload=$(get_dp_rle_payload "rle-s3-proxy" )
-    # Enroll api service
-    read dp_rle_id rle_syncId <<< "$(send_post_request "$jwt_token" "$data_proxy_url" "$dp_rle_payload" "id" "syncId")"
-    if [ "$dp_rle_id" == "error" ]; then
-      echo "DP enrollment failed. Exiting script." >&2
-      exit 1
+  dp_rle_payload=$(get_dp_rle_payload "rle-s3-proxy" )
+  # Enroll api service
+  read dp_rle_id rle_syncId <<< "$(send_post_request "$jwt_token" "$data_proxy_url" "$dp_rle_payload" "id" "syncId")"
+  if [ "$dp_rle_id" == "error" ]; then
+    echo "DP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    if [ "$all" = true ]; then
+      echo "RLE DP cluster: $dp_rle_id" >&2
+      echo "RLE Sync ID: $rle_syncId" >&2
+      export "RLE_SERVICE_ID=$dp_rle_id"
+      export "RLE_SYNC_ID=$rle_syncId"
     else
       echo "DP cluster: $dp_rle_id" >&2
       echo "Sync ID: $rle_syncId" >&2
       export "SERVICE_ID=$dp_rle_id"
       export "SYNC_ID=$rle_syncId"
     fi
+  fi
 
-    add_endpoint_dpp_deploy true $dp_rle_id
+  add_endpoint_dpp_deploy true $dp_rle_id
 }
 
 ######## ADD ENDPOINT, DPP,  DEPLOY ###########
 add_endpoint_dpp_deploy(){
     rle=$1
     dp_id=$2
+
+    name_prefix="cle-"
+    if [ $rle = true ]; then
+      name_prefix="rle-"
+    fi
 
     endpoint_list=$(send_get_request "$jwt_token" "$data_proxy_url/$dp_id/endpoints" "response")
     #get s3 endpoint id
@@ -862,9 +866,9 @@ add_endpoint_dpp_deploy(){
 
   # Add Data Policies
   # read full file
-  full_file_read_policy=$(get_full_file_read_policy_payload "dp-full-file-read" "$s3_endpoint_id"  "DECRYPT" "$aes_random_policy_id" "$full_file_name")
+  full_file_read_policy=$(get_full_file_read_policy_payload "$name_prefix+dp-full-file-read" "$s3_endpoint_id"  "DECRYPT" "$aes_random_policy_id" "$full_file_name")
   full_file_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_read_policy" "id")
-  if [ "full_file_read_policy_id" == "error" ]; then
+  if [ "$full_file_read_policy_id" == "error" ]; then
     echo "DPP Read Full failed. Exiting script." >&2
   exit 1
   else
@@ -872,7 +876,7 @@ add_endpoint_dpp_deploy(){
   fi
 
   # write full file
-  full_file_write_policy=$(get_full_file_write_linked_policy_payload "dp-full-file-write" "$s3_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "$full_file_name" "$full_file_read_policy_id")
+  full_file_write_policy=$(get_full_file_write_linked_policy_payload "$name_prefix+dp-full-file-write" "$s3_endpoint_id"  "ENCRYPT" "$aes_random_policy_id" "$full_file_name" "$full_file_read_policy_id")
   full_file_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$full_file_write_policy" "id")
   if [ "$full_file_write_policy_id" == "error" ]; then
     echo "DPP Write Full failed. Exiting script." >&2
@@ -882,7 +886,7 @@ add_endpoint_dpp_deploy(){
   fi
 
   # entity group
-  cc_entity_group_payload=$(get_entity_group_payload "credit-card" "$fpe_ccn_policy_id")
+  cc_entity_group_payload=$(get_entity_group_payload "$name_prefix+credit-card" "$fpe_ccn_policy_id")
   cc_entity_group_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/pii-entities-group" "$cc_entity_group_payload" "id")
   if [ "$cc_entity_group_id" == "error" ]; then
     echo "Entity Group Creation failed. Exiting script." >&2
@@ -891,7 +895,7 @@ add_endpoint_dpp_deploy(){
     echo "Entity Group ID: $cc_entity_group_id" >&2
   fi
 
-  csv_data_container_payload=$(get_data_container_csv_payload "credit-card" "ccn" "$cc_entity_group_id")
+  csv_data_container_payload=$(get_data_container_csv_payload "$name_prefix+credit-card" "ccn" "$cc_entity_group_id")
   csv_data_container_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-containers" "$csv_data_container_payload" "id")
   if [ "$csv_data_container_id" == "error" ]; then
     echo "CSV Data Container Creation failed. Exiting script." >&2
@@ -901,7 +905,7 @@ add_endpoint_dpp_deploy(){
   fi
 
    # field level read
-   field_read_policy=$(get_field_read_policy_payload "dp-csv-field-read" "$s3_endpoint_id"  "DECRYPT" "$csv_data_container_id" "$csv_file_name")
+   field_read_policy=$(get_field_read_policy_payload "$name_prefix+dp-csv-field-read" "$s3_endpoint_id"  "DECRYPT" "$csv_data_container_id" "$csv_file_name")
    field_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_read_policy" "id")
    if [ "$full_file_read_policy_id" == "error" ]; then
      echo "DPP CSV Read Field failed. Exiting script." >&2
@@ -911,7 +915,7 @@ add_endpoint_dpp_deploy(){
    fi
 
   #field level write
-  field_write_policy=$(get_field_write_linked_policy_payload "dp-csv-field-write" "$s3_endpoint_id"  "ENCRYPT" "$csv_data_container_id" "$csv_file_name" "$field_read_policy_id")
+  field_write_policy=$(get_field_write_linked_policy_payload "$name_prefix+dp-csv-field-write" "$s3_endpoint_id"  "ENCRYPT" "$csv_data_container_id" "$csv_file_name" "$field_read_policy_id")
   field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$field_write_policy" "id")
   if [ "$field_write_policy_id" == "error" ]; then
     echo "DPP CSV Write Filed failed. Exiting script." >&2
@@ -920,7 +924,7 @@ add_endpoint_dpp_deploy(){
     echo "DPP CSV Write Field ID: $field_write_policy_id" >&2
   fi
 
-  json_data_container_payload=$(get_data_container_json_payload "credit-card" "ccn" "$cc_entity_group_id")
+  json_data_container_payload=$(get_data_container_json_payload "$name_prefix+credit-card" "ccn" "$cc_entity_group_id")
   json_data_container_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-containers" "$json_data_container_payload" "id")
   if [ "$json_data_container_id" == "error" ]; then
     echo "JSON Data Container Creation failed. Exiting script." >&2
@@ -930,7 +934,7 @@ add_endpoint_dpp_deploy(){
   fi
 
    # field level read
-   json_field_read_policy=$(get_field_read_policy_payload "dp-json-field-read" "$s3_endpoint_id"  "DECRYPT" "$json_data_container_id" "$json_file_name")
+   json_field_read_policy=$(get_field_read_policy_payload "$name_prefix+dp-json-field-read" "$s3_endpoint_id"  "DECRYPT" "$json_data_container_id" "$json_file_name")
    json_field_read_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$json_field_read_policy" "id")
    if [ "$json_field_read_policy_id" == "error" ]; then
      echo "DPP JSON Read Field failed. Exiting script." >&2
@@ -941,7 +945,7 @@ add_endpoint_dpp_deploy(){
    fi
 
   #field level write
-  json_field_write_policy=$(get_field_write_linked_policy_payload "dp-json-field-write" "$s3_endpoint_id"  "ENCRYPT" "$json_data_container_id" "$json_file_name" "$json_field_read_policy_id")
+  json_field_write_policy=$(get_field_write_linked_policy_payload "$name_prefix+dp-json-field-write" "$s3_endpoint_id"  "ENCRYPT" "$json_data_container_id" "$json_file_name" "$json_field_read_policy_id")
   json_field_write_policy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/data-policies" "$json_field_write_policy" "id")
   if [ "$json_field_write_policy_id" == "error" ]; then
     echo "DPP JSON Write Filed failed. Exiting script." >&2
@@ -950,20 +954,13 @@ add_endpoint_dpp_deploy(){
     echo "DPP JSON Write Field ID: $json_field_write_policy_id" >&2
   fi
 
-  deploy_payload=$(get_deploy_payload "deploy-cle")
+  deploy_payload=$(get_deploy_payload "$name_prefix+deploy" )
   deploy_id=$(send_post_request "$jwt_token" "$data_proxy_url/$dp_id/deployments" "$deploy_payload" "id")
-  if [ "deploy_id" == "error" ]; then
+  if [ "$deploy_id" == "error" ]; then
    echo "Deployment failed. Exiting script." >&2
    exit 1
   else
    echo "Deployment ID: $deploy_id" >&2
-  fi
-
-  # Start Data Proxy
-  status=$(start_data_proxy)
-  if [ "$status" == "error" ]; then
-    echo "Data Proxy startup failed. Exiting script."
-    exit 1
   fi
 }
 
@@ -1037,7 +1034,7 @@ configure_bm(){
   fi
 
   # write  if condition for workflows RLE
-  if [ "$execute_workflow" == "BYOK" ]; then
+  if [ "$execute_workflow" == "BYOK" ] || [ "$execute_workflow" == "ALL" ]; then
     # Enroll KEK-1
       kek1_payload=$(get_kek_payload "$kek_name_1" "$aws_kms_id" )
       kek1_id=$(send_post_request "$jwt_token" "$kek_url" "$kek1_payload" "id")
@@ -1048,33 +1045,15 @@ configure_bm(){
         echo "KEK-1 ID: $kek1_id" >&2
       fi
   fi
+}
 
-  # dp access group
-  encrypt_decrypt_ag_payload=$(get_access_group_payload "encrypt-decrypt-both" "encrypt-decrypt")
-  encrypt_decrypt_ag_id=$(send_post_request "$jwt_token" "$access_group_url" "$encrypt_decrypt_ag_payload" "id")
-  if [ "$encrypt_decrypt_ag_id" == "error" ]; then
-    echo "Encrypt Decrypt AG failed. Exiting script." >&2
+start_data_proxy(){
+  all=$1
+  # Start Data Proxy
+  status=$(start_data_proxy_docker $all)
+  if [ "$status" == "error" ]; then
+    echo "Data Proxy startup failed. Exiting script."
     exit 1
-  else
-    echo "Encrypt Decrypt AG: $encrypt_decrypt_ag_id" >&2
-  fi
-
-  encrypt_ag_payload=$(get_access_group_payload "encrypt-only" "encrypt")
-  encrypt_ag_id=$(send_post_request "$jwt_token" "$access_group_url" "$encrypt_ag_payload" "id")
-  if [ "$encrypt_ag_id" == "error" ]; then
-    echo "Encrypt AG failed. Exiting script." >&2
-    exit 1
-  else
-    echo "Encrypt AG: $encrypt_ag_id" >&2
-  fi
-
-  decrypt_ag_payload=$(get_access_group_payload "decrypt-only" "decrypt")
-  decrypt_ag_id=$(send_post_request "$jwt_token" "$access_group_url" "$decrypt_ag_payload" "id")
-  if [ "$decrypt_ag_id" == "error" ]; then
-    echo "Decrypt AG failed. Exiting script." >&2
-    exit 1
-  else
-    echo "Decrypt AG: $decrypt_ag_id" >&2
   fi
 }
 
@@ -1083,10 +1062,18 @@ configure_bm
 
 if [ "$execute_workflow" == "Standard" ]; then
   configure_cle_data_proxy
+  (start_data_proxy false)
 elif [ "$execute_workflow" == "BYOK" ]; then
-  configure_rle_data_proxy
+  configure_rle_data_proxy false
+  (start_data_proxy false)
+elif [ "$execute_workflow" == "ALL" ]; then
+  configure_cle_data_proxy
+  configure_rle_data_proxy true
+  (start_data_proxy true)
 else
   echo "Invalid workflow. Exiting script." >&2
   exit 1
 fi
+
+
 
