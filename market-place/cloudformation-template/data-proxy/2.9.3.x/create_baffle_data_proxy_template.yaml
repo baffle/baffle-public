@@ -26,6 +26,7 @@ Parameters:
     AllowedValues:
       - "Standard"
       - "BYOK"
+      - "ALL"
 
   UserEmail:
     Description: "Email for Baffle Manage and PGAdmin UI user"
@@ -41,14 +42,22 @@ Parameters:
     Type: String
 
 Conditions:
-  CreateMultipleKeys: !Equals
+  IsAll: !Equals
+    - !Ref Workflow
+    - "ALL"
+
+  IsBYOK: !Equals
     - !Ref Workflow
     - "BYOK"
+
+  CreateMultipleKeys: !Or
+    - !Condition IsAll
+    - !Condition IsBYOK
 
 Mappings:
   RegionMap:
     us-east-1:
-      ImageId: ami-0e4c5ff0a5bc2f341
+      ImageId: ami-049b4de4240b7b2c7
     us-east-2:
       ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-1:
@@ -277,6 +286,7 @@ Resources:
     Properties:
       AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-1"
       TargetKeyId: !Ref BaffleShield1Key
+
   BaffleShield2Key:
     Type: "AWS::KMS::Key"
     Condition: CreateMultipleKeys
@@ -322,6 +332,53 @@ Resources:
     Properties:
       AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-2"
       TargetKeyId: !Ref BaffleShield2Key
+
+  BaffleShield3Key:
+    Type: "AWS::KMS::Key"
+    Condition: CreateMultipleKeys
+    Properties:
+      Description: "Baffle AWS Key"
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: "Allow use of the key by role"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:ListAliases"
+              - "kms:Encrypt"
+              - "kms:Decrypt"
+              - "kms:ReEncrypt*"
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: "Allow attachment of persistent resources"
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BaffleShieldRole.Arn
+            Action:
+              - "kms:CreateGrant"
+              - "kms:ListGrants"
+              - "kms:RevokeGrant"
+            Resource: "*"
+            Condition:
+              Bool:
+                "kms:GrantIsForAWSResource": "true"
+
+  BaffleShield3KeyAlias:
+    Type: "AWS::KMS::Alias"
+    Condition: CreateMultipleKeys
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-baffle-shield-key-3"
+      TargetKeyId: !Ref BaffleShield3Key
+
 
   BaffleEC2SecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -436,6 +493,21 @@ Outputs:
   DataProxyHealthCheck:
     Description: "The health check URL for Data Proxy"
     Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444", "/dataproxy/status" ] ]
+
+  BYOKDataProxyURL:
+    Condition: IsAll
+    Description: "The URL for BYOK Data Proxy"
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8445" ] ]
+
+  BYOKProxyHealthCheck:
+    Condition: IsAll
+    Description: "The health check URL for BYOK Data Proxy"
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8445", "/dataproxy/status" ] ]
+
+  ExtraKEK1Alias:
+    Condition: CreateMultipleKeys
+    Description: "Extra KEK to be used at workshop for BYOK"
+    Value: !Ref BaffleShield3KeyAlias
 
   DataProxyS3Bucket:
     Description: "The S3 Bucket to store Data"

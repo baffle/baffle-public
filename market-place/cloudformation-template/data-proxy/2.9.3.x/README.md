@@ -59,11 +59,11 @@ Please use the curl command to check the status (update the hostname with your h
 ```bash
 aws s3 cp kia.txt s3://bucket/kia.txt --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
-2. Download a file and verify it is encrypted 
+2. Download a file and verify it is encrypted (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 cp s3://bucket/kia.txt  downloaded_enc_kia.txt 
 ```
-3. Download a file and verify it can be  decrypted
+3. Download a file and verify it can be  decrypted 
 ```bash
 aws s3 cp s3://bucket/kia.txt  downloaded_kia.txt --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
@@ -71,10 +71,10 @@ aws s3 cp s3://bucket/kia.txt  downloaded_kia.txt --endpoint-url=https://IP:8444
 
 1. Upload a csv
 ```bash
-aws s3 cp customers.csv --endpoint-url=https://IP:8444 --no-verify-ssl
+aws s3 cp customers.csv s3://bucket/customers.csv --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-2. Download a csv and verify ccn field is encrypted
+2. Download a csv and verify ccn field is encrypted (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 cp s3://bucket/customers.csv  downloaded_enc_customers.csv
 ```
@@ -88,7 +88,7 @@ aws s3 cp s3://bucket/customers.csv  downloaded_customers.csv --endpoint-url=htt
 aws s3 cp john.json s3://bucket/john.json --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-5. Download a json and verify ccn field is encrypted
+5. Download a json and verify ccn field is encrypted (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 cp s3://bucket/john.json  downloaded_enc_john.json 
 ```
@@ -112,12 +112,12 @@ aws s3 cp kia.txt s3://bucket/T-1001-kia.txt  --endpoint-url=https://IP:8444 --n
 aws s3 cp kia.txt s3://bucket/T-2002-kia.txt  --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-3. Download  encrypted file for tenant T-1001
+3. Download  encrypted file for tenant T-1001 (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 s3://bucket/T-1001-kia.txt enc-T-1001-kia.txt
 ```
 
-4. Download  encrypted file for tenant T-2002 and verify files are different 
+4. Download  encrypted file for tenant T-2002 and verify files are different  (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 cp s3://bucket/T-2002-kia.txt enc-T-2002-kia.txt
 ```
@@ -144,12 +144,12 @@ aws s3 cp customers.csv  s3://bucket/T-1001-customers.csv   --endpoint-url=https
 aws s3 cp customers.csv  s3://bucket/T-2002-customers.csv   --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-3. Download encrypted  csv file for tenant T-1001 and verify ccn field is encrypted
+3. Download encrypted  csv file for tenant T-1001 and verify ccn field is encrypted (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 s3://bucket/T-1001-customers.csv  enc-T-1001-customers.csv 
 ```
 
-4. Download encrypted  csv file for tenant T-1001 and verify ccn field is encrypted with different key
+4. Download encrypted  csv file for tenant T-1001 and verify ccn field is encrypted with different key (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 cp s3://bucket/T-2002-customers.csv  enc-T-2002-customers.csv 
 ```
@@ -164,7 +164,7 @@ aws s3 s3://bucket/T-1001-customers.csv  T-1001-customers.csv  --endpoint-url=ht
 aws s3 cp s3://bucket/T-2002-customers.csv  T-2002-customers.csv  --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-7. Upload a json file for Tenant T-1001
+7. Upload a json file for Tenant T-1001 
 ```bash
 aws s3 cp john.json  s3://bucket/T-1001-john.json   --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
@@ -174,12 +174,12 @@ aws s3 cp john.json  s3://bucket/T-1001-john.json   --endpoint-url=https://IP:84
 aws s3 cp john.json  s3://bucket/T-2002-john.json   --endpoint-url=https://IP:8444 --no-verify-ssl
 ```
 
-9. Download encrypted  json file for tenant T-1001 and verify ccn field is encrypted
+9. Download encrypted  json file for tenant T-1001 and verify ccn field is encrypted (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 s3://bucket/T-1001-john.json  enc-T-1001-john.json 
 ```
 
-10. Download encrypted  json file for tenant T-1001 and verify ccn field is encrypted with different key
+10. Download encrypted  json file for tenant T-1001 and verify ccn field is encrypted with different key (AWS CLI installed and configured with permission to get the file)
 ```bash
 aws s3 cp s3://bucket/T-2002-john.json  enc-T-2002-john.json 
 ```
