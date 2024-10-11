@@ -397,6 +397,10 @@ Resources:
           FromPort: 8444
           ToPort: 8444
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+        - IpProtocol: tcp
+          FromPort: 8445
+          ToPort: 8445
+          CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
       SecurityGroupEgress:
         - Description: Allow all outbound traffic to user
           IpProtocol: "-1"
