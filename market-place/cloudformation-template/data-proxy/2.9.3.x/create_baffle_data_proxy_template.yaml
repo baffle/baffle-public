@@ -515,4 +515,4 @@ Outputs:
 
   DataProxyS3Bucket:
     Description: "The S3 Bucket to store Data"
-    Value: !Ref BaffleDataStorageBucket
+    Value: !Join [ "", [ "https://", !Ref "AWS::Region", ".console.aws.amazon.com/s3/buckets/", !Ref BaffleDataStorageBucket, "?region=",  !Ref "AWS::Region", "&bucketType=general&tab=objects" ] ]
