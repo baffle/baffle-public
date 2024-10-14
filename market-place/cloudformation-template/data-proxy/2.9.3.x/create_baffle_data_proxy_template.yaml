@@ -488,25 +488,25 @@ Outputs:
 
   BaffleManagerURL:
     Description: "The URL for Baffle Manager"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicIp ] ]
 
   DataProxyURL:
     Description: "The URL for Data Proxy"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444" ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicIp, ":8444" ] ]
 
   DataProxyHealthCheck:
     Description: "The health check URL for Data Proxy"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8444", "/dataproxy/status" ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicIp, ":8444", "/dataproxy/status" ] ]
 
   BYOKDataProxyURL:
     Condition: IsAll
     Description: "The URL for BYOK Data Proxy"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8445" ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicIp, ":8445" ] ]
 
   BYOKProxyHealthCheck:
     Condition: IsAll
     Description: "The health check URL for BYOK Data Proxy"
-    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8445", "/dataproxy/status" ] ]
+    Value: !Join [ "", [ "https://", !GetAtt BaffleEC2Instance.PublicIp, ":8445", "/dataproxy/status" ] ]
 
   ExtraKEK1Alias:
     Condition: CreateMultipleKeys
