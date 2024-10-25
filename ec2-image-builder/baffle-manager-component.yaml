@@ -1,0 +1,38 @@
+name: BaffleManagerInstall
+description: Install Baffle-Manager
+version: 1.0.0
+phases:
+    build:
+        commands:
+            #Install Docker
+            - sudo yum -y install docker
+            - sudo systemctl enable docker
+            - sudo systemctl start docker
+            - sudo chmod 666 /var/run/docker.sock
+            
+            #Download Baffle-Manager
+            - curl -L -u baffle-readers:AP7Do2RPP3ngKWERvyCuDWgubro -o /tmp/BM-Docker-Deploy-Release-Baffle.2.9.4.3.tar.gz https://baffle.jfrog.io/artifactory/baffle-manager-v4/BM-Docker-Deploy-Release-Baffle.2.9.4.3.tar.gz
+            
+            #Untar and run install script
+	          - echo “Extracting Baffle Manager”
+            - sudo tar -xvf /tmp/BM-Docker-Deploy-Release-Baffle.2.9.4.3.tar.gz -C /opt
+	          - cd /opt/BM-Docker-Deploy
+	   
+	          #Baffle-MongoDB
+            - sudo unzip baffle-mongodb-v4.tar.zip
+            - sudo docker load -i baffle-mongodb-v4.tar
+
+            #Baffle-Manager
+            - sudo unzip baffle-manager-v4.tar.zip
+            - sudo docker load -i baffle-manager-v4.tar
+
+            #Baffle-Frontend
+	          - sudo unzip baffle-frontend-v4.tar.zip
+            - sudo docker load -i baffle-frontend-v4.tar
+
+            #Baffle-Nginx
+            - sudo unzip baffle-nginx-v4.tar.zip 
+            - sudo docker load -i baffle-nginx-v4.tar
+            
+            
+            
