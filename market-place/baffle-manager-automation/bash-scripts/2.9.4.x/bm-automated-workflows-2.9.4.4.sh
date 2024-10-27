@@ -626,22 +626,18 @@ get_ccn_fpe_access_dpp_payload(){
 }
 
 # Get SSN CCN DPP payload with Ctr cmode
-get_ssn_ccn_ctr_dpp_payload(){
+get_ctr_dpp_payload(){
 
   payload=$(jq -n \
           --arg name "$1" \
-          --arg ssn_access_dpp_id "$2" \
-          --arg ccn_access_dpp_id "$3" \
-          --arg kek_id "$4" \
-          --arg dek_id "$5" \
+          --arg data_source_id "$2" \
+          --arg kek_id "$3" \
+          --arg dek_id "$4" \
           '{
             "name": $name,
             "dataSources": [
               {
-                "id": $ssn_access_dpp_id
-              },
-              {
-                "id": $ccn_access_dpp_id
+                "id": $data_source_id
               }
             ],
             "encryption": {
@@ -664,23 +660,19 @@ get_ssn_ccn_ctr_dpp_payload(){
   echo "$payload"
 }
 # Get SSN CCN RLE DPP payload with Ctr cmode
-get_ssn_ccn_rle_dpp_payload(){
+get_rle_ctr_dpp_payload(){
 
   payload=$(jq -n \
           --arg name "$1" \
-          --arg ssn_access_dpp_id "$2" \
-          --arg ccn_access_dpp_id "$3" \
-          --arg database_name "$4" \
-          --arg tenant1_id "$5" \
-          --arg tenant2_id "$6" \
+          --arg ds_id "$2" \
+          --arg database_name "$3" \
+          --arg tenant1_id "$4" \
+          --arg tenant2_id "$5" \
           '{
             "name": $name,
             "dataSources": [
               {
-                "id": $ssn_access_dpp_id
-              },
-              {
-                "id": $ccn_access_dpp_id
+                "id": $ds_id
               }
             ],
             "encryption": {
@@ -2005,15 +1997,27 @@ configure_cle_database_proxy(){
   else
     echo "CCN Data Source ID: $ccn_ds_cle_id" >&2
   fi
+
   # Get DPP payload
-  cle_dpp_payload=$(get_ssn_ccn_ctr_dpp_payload "cle-ssn-ccn-dpp" "$ssn_ds_cle_id" "$ccn_ds_cle_id" "$kek_id" "$dek_id")
+  ssn_cle_dpp_payload=$(get_ctr_dpp_payload "cle-ssn-dpp" "$ssn_ds_cle_id" "$kek_id" "$dek_id")
   # Enroll DPP
-  cle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$cle_dpp_payload" "id")
-  if [ "$cle_dpp_id" == "error" ]; then
-    echo "CLE DPP enrollment failed. Exiting script." >&2
+  ssn_cle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$ssn_cle_dpp_payload" "id")
+  if [ "$ssn_cle_dpp_id" == "error" ]; then
+    echo "SSN CLE DPP enrollment failed. Exiting script." >&2
     exit 1
   else
-    echo "CLE DPP ID: $cle_dpp_id" >&2
+    echo "SSN CLE DPP ID: $ssn_cle_dpp_id" >&2
+  fi
+
+  # Get DPP payload
+  ccn_cle_dpp_payload=$(get_ctr_dpp_payload "cle-ccn-dpp" "$ccn_ds_cle_id" "$kek_id" "$dek_id")
+  # Enroll DPP
+  ccn_cle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$ccn_cle_dpp_payload" "id")
+  if [ "$ccn_cle_dpp_id" == "error" ]; then
+    echo "CCN CLE DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "CCN CLE DPP ID: $ccn_cle_dpp_id" >&2
   fi
 
   # Get DB Proxy payload
@@ -2041,7 +2045,7 @@ configure_cle_database_proxy(){
 
 
   # Get Deployment payload
-  deploy_cle_payload=$(get_deploy_payload "add_encryption_access_policies" "$cle_dpp_id")
+  deploy_cle_payload=$(get_deploy_payload "add_encryption_access_policies" "$ssn_cle_dpp_id" "$ccn_cle_dpp_id")
   # Deploy DPP
   deployment_cle_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_cle_id/data-policies/deploy" "$deploy_cle_payload" "id")
   if [ "$deployment_cle_id" == "error" ]; then
@@ -2140,14 +2144,24 @@ configure_rle_database_proxy(){
   fi
 
   # Get DPP payload
-  rle_dpp_payload=$(get_ssn_ccn_rle_dpp_payload "rle-ssn-ccn-dpp" "$ssn_ds_rle_id" "$ccn_ds_rle_id" "$rle_db" "$rle_tenant1_id" "$rle_tenant2_id")
+  rle_ssn_dpp_payload=$(get_rle_ctr_dpp_payload "rle-ssn-dpp" "$ssn_ds_rle_id" "$rle_db" "$rle_tenant1_id" "$rle_tenant2_id")
   # Enroll DPP
-  rle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$rle_dpp_payload" "id")
-  if [ "$rle_dpp_id" == "error" ]; then
-    echo "RLE DPP enrollment failed. Exiting script." >&2
+  rle_ssn_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$rle_ssn_dpp_payload" "id")
+  if [ "$rle_ssn_dpp_id" == "error" ]; then
+    echo "RLE SSN DPP enrollment failed. Exiting script." >&2
     exit 1
   else
-    echo "RLE DPP ID: $rle_dpp_id" >&2
+    echo "RLE SSN DPP ID: $rle_ssn_dpp_id" >&2
+  fi
+
+  rle_ccn_dpp_payload=$(get_rle_ctr_dpp_payload "rle-ccn-dpp"  "$ccn_ds_rle_id" "$rle_db" "$rle_tenant1_id" "$rle_tenant2_id")
+  # Enroll DPP
+  rle_ccn_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$rle_ccn_dpp_payload" "id")
+  if [ "$rle_ccn_dpp_id" == "error" ]; then
+    echo "RLE CCN DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "RLE CCN DPP ID: $rle_ccn_dpp_id" >&2
   fi
 
   # Get DB Proxy payload
@@ -2196,7 +2210,7 @@ configure_rle_database_proxy(){
 
 
   # Get Deployment payload
-  deploy_rle_payload=$(get_deploy_payload "add_encryption_access_policies" "$rle_dpp_id")
+  deploy_rle_payload=$(get_deploy_payload "add_encryption_access_policies" "$rle_ssn_dpp_id" "$rle_ccn_dpp_id")
   # Deploy DPP
   deployment_rle_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_rle_id/data-policies/deploy" "$deploy_rle_payload" "id")
   if [ "$deployment_rle_id" == "error" ]; then
