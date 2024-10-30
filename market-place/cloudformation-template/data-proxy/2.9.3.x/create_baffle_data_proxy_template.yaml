@@ -57,14 +57,55 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      ImageId: ami-0d3b5230f52989878
+      ImageId: ami-03bed54099a2b8319
     us-east-2:
       ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-1:
       ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-2:
       ImageId: ami-xxxxxxxxxxxxxxxxx
-
+    af-south-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-east-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-south-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-south-2:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-southeast-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-southeast-2:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-southeast-3:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-northeast-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-northeast-2:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ap-northeast-3:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    ca-central-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    eu-central-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    eu-central-2:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    eu-west-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    eu-west-2:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    eu-west-3:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    eu-south-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    eu-south-2:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    eu-north-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    me-central-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
+    sa-east-1:
+      ImageId: ami-xxxxxxxxxxxxxxxxx
 Resources:
   BaffleVPC:
     Type: "AWS::EC2::VPC"
@@ -72,6 +113,11 @@ Resources:
       CidrBlock: "10.0.0.0/16"
       EnableDnsSupport: true
       EnableDnsHostnames: true
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W60
+            reason: "Enabling flow log requires a lot of resource. This is out of scope."
 
   InternetGateway:
     Type: "AWS::EC2::InternetGateway"
@@ -124,9 +170,38 @@ Resources:
 
   BaffleDataStorageBucket:
     Type: "AWS::S3::Bucket"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W51
+            reason: "The policy is controlled by ec2 instance policy, so no need os s3 bucket policy"
+          - id: W35
+            reason: "The access logging will require additional s3 bucket to log"
+          - id: W41
+            reason: "The data encryption key are encrypted"
 
   BaffleKeyStorageBucket:
     Type: "AWS::S3::Bucket"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W51
+            reason: "The policy is controlled by ec2 instance policy, so no need os s3 bucket policy"
+          - id: W35
+            reason: "The access logging will require additional s3 bucket to log"
+          - id: W41
+            reason: "The data controlled by policy is encrypted"
+
+  DeleteBucketLambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-DeleteBucketLambdaFunction'
+      RetentionInDays: 3
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W84
+            reason: "This is for function that deletes files on s3. Don't need to encrypt it."
 
   DeleteBucketLambdaExecutionRole:
     Type: "AWS::IAM::Role"
@@ -149,7 +224,7 @@ Resources:
                   - "logs:CreateLogGroup"
                   - "logs:CreateLogStream"
                   - "logs:PutLogEvents"
-                Resource: "*"
+                Resource: !GetAtt DeleteBucketLambdaLogGroup.Arn
         - PolicyName: S3Policy
           PolicyDocument:
             Version: 2012-10-17
@@ -191,26 +266,25 @@ Resources:
       Handler: index.handler
       Runtime: python3.9
       Role: !GetAtt DeleteBucketLambdaExecutionRole.Arn
-
-  DeleteBucketLambdaLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${DeleteBucketLambdaFunction}'
-      RetentionInDays: 3
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W89
+            reason: "The deploying in VPC will require additional resources, which is overkill for simple job it does"
+          - id: W92
+            reason: "ReservedConcurrentExecutions is not needed as this just empties the bucket"
 
   BaffleDataStorageBucketDeleteCustomResource:
     Type: "Custom::CustomResource"
     Properties:
       ServiceToken: !GetAtt DeleteBucketLambdaFunction.Arn
       s3bucketName: !Ref BaffleDataStorageBucket
-    DependsOn: BaffleDataStorageBucket
 
   BaffleKeyStorageBucketDeleteCustomResource:
     Type: "Custom::CustomResource"
     Properties:
       ServiceToken: !GetAtt DeleteBucketLambdaFunction.Arn
       s3bucketName: !Ref BaffleKeyStorageBucket
-    DependsOn: BaffleKeyStorageBucket
 
   BaffleShieldRole:
     Type: "AWS::IAM::Role"
@@ -229,7 +303,11 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: "Allow"
-                Action: "s3:*"
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:GetBucketPolicy"
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
@@ -238,7 +316,11 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: "Allow"
-                Action: "s3:*"
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:GetBucketPolicy"
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleDataStorageBucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleDataStorageBucket, "/*" ] ]
@@ -280,6 +362,11 @@ Resources:
             Condition:
               Bool:
                 "kms:GrantIsForAWSResource": "true"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F19
+            reason: "Keys are temporary and is deleted right away on template tear down"
 
   BaffleShield1KeyAlias:
     Type: "AWS::KMS::Alias"
@@ -325,6 +412,11 @@ Resources:
             Condition:
               Bool:
                 "kms:GrantIsForAWSResource": "true"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F19
+            reason: "Keys are temporary and is deleted right away on template tear down"
 
   BaffleShield2KeyAlias:
     Type: "AWS::KMS::Alias"
@@ -371,6 +463,11 @@ Resources:
             Condition:
               Bool:
                 "kms:GrantIsForAWSResource": "true"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: F19
+            reason: "Keys are temporary and is deleted right away on template tear down"
 
   BaffleShield3KeyAlias:
     Type: "AWS::KMS::Alias"
@@ -385,19 +482,23 @@ Resources:
     Properties:
       GroupDescription: "Security group with specific ports open"
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        - Description: Allow HTTPS traffic
+          IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
-        - IpProtocol: tcp
+        - Description: Allow HTTPS traffic internally
+          IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: !GetAtt BaffleVPC.CidrBlock
-        - IpProtocol: tcp
+        - Description: Allow Data Proxy traffic
+          IpProtocol: tcp
           FromPort: 8444
           ToPort: 8444
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
-        - IpProtocol: tcp
+        - Description: Allow Data Proxy traffic
+          IpProtocol: tcp
           FromPort: 8445
           ToPort: 8445
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
@@ -414,6 +515,13 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
       VpcId: !Ref BaffleVPC
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+          - id: W40
+            reason: "This egress require to communication on all port to user machine and vpc."
+          - id: W5
+            reason: "This is required for ec2 to fetch a file from github repo."
 
   BaffleShieldInstanceProfile:
     Type: "AWS::IAM::InstanceProfile"
@@ -428,7 +536,6 @@ Resources:
 
   BaffleEC2Instance:
     Type: "AWS::EC2::Instance"
-    DependsOn: BaffleShieldInstanceProfile
     Properties:
       IamInstanceProfile: !Ref BaffleShieldInstanceProfile
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", ImageId]
