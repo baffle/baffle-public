@@ -725,18 +725,13 @@ get_ssn_ccn_dle_dpp_payload(){
 
   payload=$(jq -n \
           --arg name "$1" \
-          --arg t1_ds_id "$2" \
-          --arg t2_ds_id "$3" \
-          --arg tenant1_id "$4" \
-          --arg tenant2_id "$5" \
+          --arg ds_id "$2" \
+          --arg tenant_id "$3" \
           '{
              "name": $name,
              "dataSources": [
                {
-                 "id": $t1_ds_id
-               },
-               {
-                 "id": $t2_ds_id
+                 "id": $ds_id
                }
              ],
              "encryption": {
@@ -748,10 +743,7 @@ get_ssn_ccn_dle_dpp_payload(){
                    "tenantColumns": [],
                    "tenants": [
                      {
-                       "id": $tenant1_id
-                     },
-                     {
-                       "id": $tenant2_id
+                       "id": $tenant_id
                      }
                    ],
                    "tenantDetermination": "DB_NAME"
@@ -2309,15 +2301,26 @@ configure_dle_database_proxy(){
     echo "CCN Data Source ID: $ds_dle_t2_id" >&2
   fi
 
-  # Get DPP payload
-  dle_dpp_payload=$(get_ssn_ccn_dle_dpp_payload "dle-ssn-ccn-dpp" "$ds_dle_t1_id" "$ds_dle_t2_id" "$dle_tenant1_id" "$dle_tenant2_id")
+  # Get Tenant 1 DPP payload
+  dle_tenant1_dpp_payload=$(get_ssn_ccn_dle_dpp_payload "dle-tenant1-ssn-ccn-dpp" "$ds_dle_t1_id" "$dle_tenant1_id")
   # Enroll DPP
-  dle_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$dle_dpp_payload" "id")
-  if [ "$dle_dpp_id" == "error" ]; then
-    echo "DLE DPP enrollment failed. Exiting script." >&2
+  dle_tenant1_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$dle_tenant1_dpp_payload" "id")
+  if [ "$dle_tenant1_dpp_id" == "error" ]; then
+    echo "Tenant 1 DLE DPP enrollment failed. Exiting script." >&2
     exit 1
   else
-    echo "DLE DPP ID: $dle_dpp_id" >&2
+    echo "Tenant 1 DLE DPP ID: $dle_tenant1_dpp_id" >&2
+  fi
+
+  # Get Tenant 2 DPP payload
+  dle_tenant2_dpp_payload=$(get_ssn_ccn_dle_dpp_payload "dle-tenant2-ssn-ccn-dpp" "$ds_dle_t2_id"  "$dle_tenant2_id")
+  # Enroll DPP
+  dle_tenant2_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$dle_tenant2_dpp_payload" "id")
+  if [ "$dle_tenant2_dpp_id" == "error" ]; then
+    echo "Tenant 2 DLE DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Tenant 2 DLE DPP ID: $dle_tenant2_dpp_id" >&2
   fi
 
   # Get DB Proxy payload
@@ -2355,7 +2358,7 @@ configure_dle_database_proxy(){
 
 
   # Get Deployment payload
-  deploy_dle_payload=$(get_deploy_payload "add_encryption_access_policies" "$dle_dpp_id")
+  deploy_dle_payload=$(get_deploy_payload "add_encryption_access_policies" "$dle_tenant1_dpp_id" "$dle_tenant2_dpp_id")
   # Deploy DPP
   deployment_dle_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_dle_id/data-policies/deploy" "$deploy_dle_payload" "id")
   if [ "$deployment_dle_id" == "error" ]; then
