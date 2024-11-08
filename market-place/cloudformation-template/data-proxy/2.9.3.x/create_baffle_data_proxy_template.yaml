@@ -539,7 +539,7 @@ Resources:
     Properties:
       IamInstanceProfile: !Ref BaffleShieldInstanceProfile
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", ImageId]
-      InstanceType: t2.large
+      InstanceType: m4.xlarge
       KeyName: !Ref BaffleKeyPair
       NetworkInterfaces:
         - DeviceIndex: 0
