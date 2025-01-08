@@ -778,8 +778,8 @@ Resources:
             # Setup docker
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
-            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/2.9.4.x/bm-automated-workflows-2.9.4.6.sh
-            mv bm-automated-workflows-2.9.4.6.sh bm-automated-workflows.sh >> output.txt 2>&1
+            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/2.9.5.x/bm-automated-workflows-2.9.5.5.sh
+            mv bm-automated-workflows-2.9.5.5.sh bm-automated-workflows.sh >> output.txt 2>&1
             chmod +x bm-automated-workflows.sh >> output.txt 2>&1
             sudo ./bm-automated-workflows.sh >> output.txt 2>&1
         - Fn::Base64: !Sub |
@@ -798,8 +798,8 @@ Resources:
             # Setup docker
             sudo service docker start >> output.txt 2>&1
             cd /home/ec2-user
-            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/2.9.4.x/bm-automated-workflows-2.9.4.6.sh
-            mv bm-automated-workflows-2.9.4.6.sh bm-automated-workflows.sh >> output.txt 2>&1
+            wget https://raw.githubusercontent.com/baffle/baffle-public/master/market-place/baffle-manager-automation/bash-scripts/2.9.5.x/bm-automated-workflows-2.9.5.5.sh
+            mv bm-automated-workflows-2.9.5.5.sh bm-automated-workflows.sh >> output.txt 2>&1
             chmod +x bm-automated-workflows.sh >> output.txt 2>&1
             sudo ./bm-automated-workflows.sh >> output.txt 2>&1
 
