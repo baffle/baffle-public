@@ -57,6 +57,7 @@ Parameters:
       - "RLE"
       - "DLE"
       - "RQE_MIGRATION"
+      - "PG_VECTOR"
 
   UserEmail:
     Description: "Email for Baffle Manager and PGAdmin UI user"
@@ -94,6 +95,10 @@ Conditions:
     - !Ref Workflow
     - "DLE"
 
+  IsPGVector: !Equals
+    - !Ref Workflow
+    - "PG_VECTOR"
+
   CreateDMS: !Or
     - !Condition IsAll
     - !Condition IsStaticMask
@@ -102,6 +107,10 @@ Conditions:
     - !Condition IsAll
     - !Condition IsRLE
     - !Condition IsDLE
+
+  CreateBedRockRole: !Or
+    - !Condition IsAll
+    - !Condition IsPGVector
 
 Mappings:
   RegionMap:
@@ -438,6 +447,19 @@ Resources:
                 Resource:
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket ] ]
                   - !Join [ "", [ "arn:aws:s3:::", !Ref BaffleKeyStorageBucket, "/*" ] ]
+        - !If  # Conditionally add a Bedrock policy
+          - CreateBedRockRole  # Condition to check
+          - PolicyName: "BedrockPolicy"
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "bedrock:InvokeModel"
+                  Resource:
+                    - "arn:aws:bedrock:*::foundation-model/amazon.titan-text-lite-v1"
+                    - "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v1"
+          - !Ref "AWS::NoValue"  # Skip if condition not met
 
   BaffleShield1Key:
     Type: "AWS::KMS::Key"

@@ -62,7 +62,9 @@ shield_rqe_migration_folder="Baffle-Shield-Postgresql-RQE-Migration"
 shield_rqe_migration_host="shield_rqe_migration"
 shield_rqe_migration_port=5438
 migration_service_folder="Baffle-Migration"
-
+shield_pg_vector_folder="Baffle-Shield-Postgresql-PG-vector"
+shield_pg_vector_host="shield_pg_vector"
+shield_pg_vector_port=5439
 
 
 #Database Names
@@ -75,6 +77,7 @@ dle_t1_db="dle_t1_db"
 dle_t2_db="dle_t2_db"
 rqe_db="rqe_db"
 rqe_migration_db="rqe_migration_db"
+pg_vector_db="pg_vector_db"
 
 # Database Table Creation SQL Commands
 customers_table_create_command="CREATE TABLE customers (
@@ -105,6 +108,10 @@ employees_insert_command="INSERT INTO employees (uuid, first_name, last_name, ss
                           ('8', 'Frank', 'Miller', '890-12-3456', 65, 240000),
                           ('9', 'Grace', 'Davis', '901-23-4567', 70, 260000),
                           ('10', 'Helen', 'Martin', '012-34-5678', 75, 280000);"
+
+customer_profile_embeddings_table="CREATE TABLE customer_profile_embeddings (id int, chunk text, embeddings vector(1536));"
+customer_profile_embeddings_insert_command="COPY customer_profile_embeddings  from '/home/ec2-user/AE-2/data/customer_profile_embeddings.csv' delimiter ',' CSV HEADER;"
+
 # Function to send a GET request and process the response
 send_get_request() {
   local jwt_token=$1
@@ -651,6 +658,7 @@ get_ctr_dpp_payload(){
 
   echo "$payload"
 }
+
 # Get SSN CCN RLE DPP payload with Ctr cmode
 get_rle_ctr_dpp_payload(){
 
@@ -1228,6 +1236,10 @@ start_pg_admin(){
     group="rqe-migration"
     shield_host=$shield_rqe_migration_host
     shield_port=$shield_rqe_migration_port
+  elif [  "$execute_workflow" == "PG_VECTOR" ]; then
+    group="pg-vector"
+    shield_host=$shield_pg_vector_host
+    shield_port=$shield_pg_vector_port
   fi
 
 
@@ -1313,7 +1325,7 @@ start_pg_admin(){
                                           }
                                         }
                                     }')
-    elif [ "$execute_workflow" == "CLE" ] || [ "$execute_workflow" == "RLE" ] || [ "$execute_workflow" == "DLE" ] || [ "$execute_workflow" == "RQE" ] || [ "$execute_workflow" == "RQE_MIGRATION" ]; then
+    elif [ "$execute_workflow" == "CLE" ] || [ "$execute_workflow" == "RLE" ] || [ "$execute_workflow" == "DLE" ] || [ "$execute_workflow" == "RQE" ] || [ "$execute_workflow" == "RQE_MIGRATION" ] || [ "$execute_workflow" == "PG_VECTOR" ]; then
       servers_json=$(jq -n \
                                     --arg db_host_name "$db_host_name" \
                                     --argjson db_port "$db_port" \
@@ -1363,6 +1375,8 @@ start_pg_admin(){
                         --argjson shield_rqe_port "$shield_rqe_port" \
                         --arg shield_rqe_migration_host "$shield_rqe_migration_host" \
                         --argjson shield_rqe_migration_port "$shield_rqe_migration_port" \
+                        --arg shield_pg_vector_host "$shield_pg_vector_host" \
+                        --argjson shield_pg_vector_port "$shield_pg_vector_port" \
                         '{
                           "Servers": {
                             "1": {
@@ -1518,6 +1532,26 @@ start_pg_admin(){
                             "16": {
                               "Name": "direct@baffle",
                               "Group": "rqe-migration",
+                              "Host": $db_host_name,
+                              "Port": $db_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": $db_user_name,
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "17": {
+                              "Name": "Shield@baffle",
+                              "Group": "pg-vector",
+                              "Host": $shield_pg_vector_host,
+                              "Port": $shield_pg_vector_port,
+                              "MaintenanceDB": "postgres",
+                              "Username": "baffle",
+                              "PassFile": "/pgadmin4/pgpass",
+                              "role": "baffle"
+                            },
+                            "18": {
+                              "Name": "direct@baffle",
+                              "Group": "pg-vector",
                               "Host": $db_host_name,
                               "Port": $db_port,
                               "MaintenanceDB": "postgres",
@@ -2593,6 +2627,144 @@ configure_rqe_migration_database_proxy(){
   fi
 
 }
+
+################## Create RQE Database and Install UDF's ##################
+create_rqe_db_install_udfs(){
+  db_name=$1
+ # Create database and tables
+  echo "Dropping & Creating RQE database..." >&2
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "DROP DATABASE IF EXISTS $db_name;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "CREATE DATABASE $db_name;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "create schema baffle_udfs;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA baffle_udfs TO $db_user_name;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "create extension if not exists pg_tle;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "GRANT pgtle_admin TO $db_user_name;")
+  echo "Installing RQE UDFs..."
+  execution_status=$(execute_sql_file "$db_host_name" "$db_port" "$db_user_name" "$db_name" "/home/ec2-user/AE-2/rqe_base_plpgsql.sql")
+  if [ "$execution_status" == "error" ]; then
+    echo "Installing RQE Base UDFs failed. Exiting script." >&2
+    exit 1
+  fi
+
+  execution_status=$(execute_sql_file "$db_host_name" "$db_port" "$db_user_name" "$db_name" "/home/ec2-user/AE-2/rqe_udfs_plpgsql.sql")
+  if [ "$execution_status" == "error" ]; then
+    echo "Installing RQE UDFs failed. Exiting script." >&2
+    exit 1
+  fi
+}
+
+################## Configuration for PG Vector Database Proxy ##################
+configure_pg_vector_database_proxy(){
+  echo -e "\n#### Configuring PG Vector Database Proxy... ####\n" >&2
+  # Create PG vector database and install UDF's
+  create_pg_vector_db_install_udfs "$pg_vector_db"
+  # Get Data Source payload
+  ds_vector_payload=$(get_ds_payload "pg_vector_ds" "$database_id" "$pg_vector_db" "public" "customer_profile_embeddings" "chunk:text" "embeddings:vector(1536)")
+
+  # Enroll data source
+  ds_pg_vector_id=$(send_post_request "$jwt_token" "$data_source_url" "$ds_vector_payload" "id")
+  if [ "$ds_pg_vector_id" == "error" ]; then
+    echo "Pg Vector Data Source enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Pg Vector  Data Source ID: $ds_pg_vector_id" >&2
+  fi
+
+  # Get DPP payload
+  pg_vector_dpp_payload=$(get_ctr_dpp_payload "pg-vector-dpp" "$ds_pg_vector_id" "$kek_id" "$dek_id" )
+  # Enroll DPP
+  pg_vector_dpp_id=$(send_post_request "$jwt_token" "$dpp_url" "$pg_vector_dpp_payload" "id")
+  if [ "$pg_vector_dpp_id" == "error" ]; then
+    echo "Pg Vector  DPP enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Pg Vector DPP ID: $pg_vector_dpp_id" >&2
+  fi
+
+  # Get DB Proxy payload
+  db_proxy_pg_vector_payload=$(get_db_proxy_payload "proxy_pg_vector" "$database_id" "$aws_kms_id" "$kek_id")
+  # Enroll DB Proxy
+  read db_proxy_pq_vector_id pq_vector_syncId <<< $(send_post_request "$jwt_token" "$db_proxy_url" "$db_proxy_pg_vector_payload" "id" "syncId")
+  if [ "$db_proxy_pq_vector_id" == "error" ]; then
+    echo "DB Proxy enrollment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "DB Proxy ID: $db_proxy_pq_vector_id" >&2
+    echo "Sync ID: $pq_vector_syncId" >&2
+  fi
+
+  # Apply Configure
+  config_payload=$(get_proxy_configuration_payload "pg_vector_port_change" "PG_VECTOR_PORT" "$shield_pg_vector_port")
+  # Apply Configuration
+  config_name=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_pq_vector_id/configurations" "$config_payload" "name")
+  if [ "$config_name" == "error" ]; then
+    echo "Applying configuration failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Configuration applied : RQE Enabled and Port change to $shield_rqe_port" >&2
+  fi
+
+  # Get Deployment payload
+  deploy_pg_vector_payload=$(get_deploy_payload "add_pg_vector_encryption_access_policies" "$pg_vector_dpp_id")
+  # Deploy DPP
+  deployment_pg_vector_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_rqe_id/data-policies/deploy" "$deploy_pg_vector_payload" "id")
+  if [ "$deployment_pg_vector_id" == "error" ]; then
+    echo "Deployment failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Deployment ID: $deployment_pg_vector_id" >&2
+  fi
+
+  # Start PG_Vector Postgres Proxy
+  status=$(start_postgres_proxy "$pq_vector_syncId" "$shield_pg_vector_folder" "$shield_pg_vector_host" "$shield_pg_vector_port")
+  if [ "$status" == "error" ]; then
+    echo "Postgres PG Vector Proxy startup failed. Exiting script."
+    exit 1
+  fi
+
+  # Sleep for 10 seconds
+  echo "Sleeping for 10 seconds..." >&2
+  sleep 10
+
+  # create employees table
+  echo "Creating customer_profile_embeddings table in RQE database..." >&2
+  execution_status=$(execute_sql_command "localhost" "$shield_pg_vector_port" "$db_user_name" "$pg_vector_db" "$customer_profile_embeddings_table")
+  execution_status=$(execute_sql_command "localhost" "$shield_pg_vector_port" "$db_user_name" "$pg_vector_db" "$customer_profile_embeddings_insert_command")
+
+  if [ "$execution_status" == "error" ]; then
+    echo "Inserting rows into customer_profile_embeddings table in PG Vector database failed. Exiting script." >&2
+    exit 1
+  else
+    echo "Rows inserted into customer_profile_embeddings table in PG Vector database." >&2
+  fi
+
+}
+
+
+################## Create PG Vector Database and Install UDF's ##################
+create_pg_vector_db_install_udfs(){
+  db_name=$1
+ # Create database and tables
+  echo "Dropping & Creating PG Vector database..." >&2
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "DROP DATABASE IF EXISTS $db_name;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "postgres" "CREATE DATABASE $db_name;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "create schema baffle_udfs;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA baffle_udfs TO $db_user_name;")
+  execution_status=$(execute_sql_command "$db_host_name" "$db_port" "$db_user_name" "$db_name" "create extension if not exists vector;")
+  echo "Installing RQE UDFs..."
+  execution_status=$(execute_sql_file "$db_host_name" "$db_port" "$db_user_name" "$db_name" "/home/ec2-user/AE-2/rqe_base_plpgsql.sql")
+  if [ "$execution_status" == "error" ]; then
+    echo "Installing RQE Base UDFs failed. Exiting script." >&2
+    exit 1
+  fi
+
+  execution_status=$(execute_sql_file "$db_host_name" "$db_port" "$db_user_name" "$db_name" "/home/ec2-user/AE-2/rqe_udfs_plpgsql.sql")
+  if [ "$execution_status" == "error" ]; then
+    echo "Installing RQE UDFs failed. Exiting script." >&2
+    exit 1
+  fi
+}
+
 ################## Main Workflow ##################
 configure_bm(){
   ################## Configuration for Baffle Manager ##################
@@ -2723,6 +2895,7 @@ if [ "$execute_workflow" == "ALL" ]; then
   configure_dle_database_proxy
   configure_rqe_database_proxy
   configure_rqe_migration_database_proxy
+  configure_pg_vector_database_proxy
 elif [ "$execute_workflow" == "ENCRYPTION" ]; then
   configure_cle_database_proxy
   configure_rle_database_proxy
@@ -2741,6 +2914,8 @@ elif [ "$execute_workflow" == "RQE" ]; then
   configure_rqe_database_proxy
 elif [ "$execute_workflow" == "RQE_MIGRATION" ]; then
   configure_rqe_migration_database_proxy
+elif [ "$execute_workflow" == "PG_VECTOR" ]; then
+  configure_pg_vector_database_proxy
 else
   echo "Invalid workflow. Exiting script." >&2
   exit 1
