@@ -2707,7 +2707,7 @@ configure_pg_vector_database_proxy(){
   # Get Deployment payload
   deploy_pg_vector_payload=$(get_deploy_payload "add_pg_vector_encryption_access_policies" "$pg_vector_dpp_id")
   # Deploy DPP
-  deployment_pg_vector_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_rqe_id/data-policies/deploy" "$deploy_pg_vector_payload" "id")
+  deployment_pg_vector_id=$(send_post_request "$jwt_token" "$db_proxy_url/$db_proxy_pq_vector_id/data-policies/deploy" "$deploy_pg_vector_payload" "id")
   if [ "$deployment_pg_vector_id" == "error" ]; then
     echo "Deployment failed. Exiting script." >&2
     exit 1
