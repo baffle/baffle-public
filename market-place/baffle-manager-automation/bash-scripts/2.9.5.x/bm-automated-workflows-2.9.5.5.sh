@@ -912,7 +912,7 @@ get_proxy_configuration_payload(){
                              "outputAsJson": true
                            }
                         }')
-  elif [ "$type" == "RQE_PORT" ] || [ "$type" == "RQE_MIGRATION_PORT" ]; then
+  elif [ "$type" == "RQE_PORT" ] || [ "$type" == "RQE_MIGRATION_PORT" ] || [ "$type" == "PG_VECTOR_PORT" ]; then
     proxy_configuration_payload=$(jq -n \
                              --arg name "$name" \
                              --argjson port "$port" \
@@ -2701,7 +2701,7 @@ configure_pg_vector_database_proxy(){
     echo "Applying configuration failed. Exiting script." >&2
     exit 1
   else
-    echo "Configuration applied : RQE Enabled and Port change to $shield_rqe_port" >&2
+    echo "Configuration applied : PG Vector Enabled and Port change to $shield_pg_vector_port" >&2
   fi
 
   # Get Deployment payload
