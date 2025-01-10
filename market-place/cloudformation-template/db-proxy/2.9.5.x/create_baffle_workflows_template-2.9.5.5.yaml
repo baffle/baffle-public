@@ -115,7 +115,7 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      ImageId: ami-09dd35bbe5dfc9a52
+      ImageId: ami-022832981fa7dc9d3
     us-east-2:
       ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-1:
