@@ -115,7 +115,7 @@ Conditions:
 Mappings:
   RegionMap:
     us-east-1:
-      ImageId: ami-022832981fa7dc9d3
+      ImageId: ami-015a7b70c7238b719
     us-east-2:
       ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-1:
@@ -729,6 +729,12 @@ Resources:
           FromPort: 8446
           ToPort: 8446
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
+        - Description: Allow Gradio traffic
+          Condition: CreateBedRockRole
+          IpProtocol: tcp
+          FromPort: 7860
+          ToPort: 7860
+          CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
         - Description: Allow Postgres traffic
           IpProtocol: tcp
           FromPort: 5432
@@ -939,6 +945,11 @@ Outputs:
   PGAdminURL:
     Description: "The URL for PG Admin Console"
     Value: !Join [ "", [ "http://", !GetAtt BaffleEC2Instance.PublicDnsName, ":8446" ] ]
+
+  GradioURL:
+    Condition: CreateBedRockRole
+    Description: "The URL for Gradio Console"
+    Value: !Join [ "", [ "http://", !GetAtt BaffleEC2Instance.PublicDnsName, ":7860" ] ]
 
   DMSMigrationTaskURL:
     Condition: CreateDMS

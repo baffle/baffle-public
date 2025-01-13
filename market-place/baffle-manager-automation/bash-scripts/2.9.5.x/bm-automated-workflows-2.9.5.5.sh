@@ -2738,8 +2738,41 @@ configure_pg_vector_database_proxy(){
     echo "Rows inserted into customer_profile_embeddings table in PG Vector database." >&2
   fi
 
+  # Start the Gradio service
+  status=$(start_gradio)
+  if [ "$status" == "error" ]; then
+    echo "Gradio startup failed. Exiting script."
+    exit 1
+  fi
 }
 
+################## Start PG Vector Gradio APP ##################
+start_gradio(){
+  echo -e "\n#### Starting Gradio... ####\n" >&2
+  # change the current directory
+  cd /opt/pgvector
+  # Start the Baffle Manager service
+  docker-compose up -d &
+
+  # sleep for 10 seconds
+  sleep 10
+  # Check if port 7860 is open
+  counter=0
+  while ! netstat -tuln | grep 7860 && [ $counter -lt 10 ]; do
+    echo "Port 7860 is not open. Retrying in 30 seconds..." >&2
+    sleep 30
+    ((counter++))
+  done
+
+ if netstat -tuln | grep 7860; then
+   echo "Port 7860 is open. Gradio Service is up and running." >&2
+   echo "success"
+ elif [ $counter -eq 10 ]; then
+   echo "Port 7860 is not open after 5 minutes. Exiting script." >&2
+   echo "error"
+ fi
+
+}
 
 ################## Create PG Vector Database and Install UDF's ##################
 create_pg_vector_db_install_udfs(){
