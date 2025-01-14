@@ -109,7 +109,7 @@ employees_insert_command="INSERT INTO employees (uuid, first_name, last_name, ss
                           ('9', 'Grace', 'Davis', '901-23-4567', 70, 260000),
                           ('10', 'Helen', 'Martin', '012-34-5678', 75, 280000);"
 
-customer_profile_embeddings_table="CREATE TABLE customer_profile_embeddings (id int, chunk text, embeddings vector(1536));"
+customer_profile_embeddings_table="CREATE TABLE customer_profile_embeddings ( id INT PRIMARY KEY, chunk TEXT, embeddings VECTOR(1536));"
 customer_profile_embeddings_insert_command="\COPY customer_profile_embeddings  from '/home/ec2-user/AE-2/data/customer_profile_embeddings.csv' delimiter ',' CSV HEADER;"
 
 # Function to send a GET request and process the response
