@@ -233,7 +233,7 @@ Resources:
       AllocatedStorage: "20"
       DBInstanceClass: "db.t3.micro"
       Engine: "postgres"
-      EngineVersion: "15.6"
+      EngineVersion: "15.10"
       MasterUsername:
         Fn::Sub: "{{resolve:secretsmanager:${BaffleDBSecret}::username}}"
       MasterUserPassword:
