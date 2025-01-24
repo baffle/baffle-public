@@ -730,7 +730,6 @@ Resources:
           ToPort: 8446
           CidrIp: !Join [ "", [ !Ref MyIP, "/32" ] ]
         - Description: Allow Gradio traffic
-          Condition: CreateBedRockRole
           IpProtocol: tcp
           FromPort: 7860
           ToPort: 7860
