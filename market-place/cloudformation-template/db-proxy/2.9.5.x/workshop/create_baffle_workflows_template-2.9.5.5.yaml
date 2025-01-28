@@ -121,7 +121,7 @@ Mappings:
     us-west-1:
       ImageId: ami-xxxxxxxxxxxxxxxxx
     us-west-2:
-      ImageId: ami-xxxxxxxxxxxxxxxxx
+      ImageId: ami-0f4899331ef89b210
     af-south-1:
       ImageId: ami-xxxxxxxxxxxxxxxxx
     ap-east-1:
